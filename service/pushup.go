@@ -8,6 +8,7 @@ import (
 	"time"
 	"trackerbot/cache"
 	"trackerbot/repository"
+	
 )
 
 // PushupService предоставляет методы для работы с данными отжиманий,
@@ -38,7 +39,13 @@ func NewPushupService(repo repository.PushupRepository, cache *cache.TodayCache)
 // Возвращает:
 // - string: текстовый отчет о выполнении
 // - error: ошибка операции или nil
-func (s *PushupService) AddPushups(ctx context.Context, userID int64, count int) (string, error) {
+func (s *PushupService) AddPushups(ctx context.Context, userID int64, username string, count int) (string, error) {
+	
+	   // Обеспечиваем существование пользователя
+    if err := s.repo.EnsureUser(ctx, userID, username); err != nil {
+        return "", err
+    }
+	
 	// Получаем текущую дату (без времени)
 	today := time.Now().UTC().Truncate(24 * time.Hour)
 	
@@ -57,6 +64,8 @@ func (s *PushupService) AddPushups(ctx context.Context, userID int64, count int)
 	if totalToday >= 100 {
 		response += "\nВы выполнили дневную норму!"
 	}
+
+
 
 	return response, nil
 }
@@ -105,5 +114,22 @@ func (s *PushupService) GetTotalStat(ctx context.Context, userID int64) (int, er
 	if err != nil {
 		return 0, fmt.Errorf("ошибка получения общей статистики: %w", err)
 	}
+
 	return total, nil
 }
+
+
+//Новые методы для статистики
+func (s *PushupService) GetTodayLeaderboard(ctx context.Context) ([]repository.LeaderboardItem, error) {
+    items, err := s.repo.GetTodayLeaderboard(ctx)
+    if err != nil {
+        return nil, err
+    }
+    
+    // Добавляем ранги
+    for i := range items {
+        items[i].Rank = i + 1
+    }
+    return items, nil
+}
+

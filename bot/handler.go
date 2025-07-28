@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,9 +17,9 @@ import (
 
 // BotHandler обрабатывает входящие сообщения Telegram и управляет взаимодействием с пользователем
 type BotHandler struct {
-	bot     *tgbotapi.BotAPI       // Клиент Telegram Bot API
-	service *service.PushupService // Сервис для работы с отжиманиями
-	pendingInputs sync.Map
+	bot           *tgbotapi.BotAPI       // Клиент Telegram Bot API
+	service       *service.PushupService // Сервис для работы с отжиманиями
+	pendingInputs sync.Map // Сервис для удаляения состояние ожидания 
 }
 
 const inputTimeout = 10 * time.Second
@@ -46,32 +47,33 @@ func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
 	}
 
 	// Извлекаем идентификаторы пользователя и чата
+	username := update.Message.From.UserName
 	userID := update.Message.From.ID
 	chatID := update.Message.Chat.ID
 
 	// Проверяем не истекло ли время ожидания ввода
-    if expiry, ok := h.getPendingInput(chatID); ok {
-        if time.Now().After(expiry) {
-            // Время истекло, но cleanup еще не сработал
-            h.clearPendingInput(chatID)
-            msg := tgbotapi.NewMessage(chatID, "Ввод отменен по таймауту.")
-            msg.ReplyMarkup = mainKeyboard()
-            h.bot.Send(msg)
-            return
-        }
+	if expiry, ok := h.getPendingInput(chatID); ok {
+		if time.Now().After(expiry) {
+			// Время истекло, но cleanup еще не сработал
+			h.clearPendingInput(chatID)
+			msg := tgbotapi.NewMessage(chatID, "Ввод отменен по таймауту.")
+			msg.ReplyMarkup = mainKeyboard()
+			h.bot.Send(msg)
+			return
+		}
 
-        // Пытаемся обработать как число
-        if count, err := strconv.Atoi(update.Message.Text); err == nil {
-            h.clearPendingInput(chatID)
-            h.handleAddPushups(ctx, userID, chatID, count)
-            return
-        }
-        
-        // Не число - сообщаем об ошибке
-        msg := tgbotapi.NewMessage(chatID, "Пожалуйста, введите число:")
-        h.bot.Send(msg)
-        return
-    }
+		// Пытаемся обработать как число
+		if count, err := strconv.Atoi(update.Message.Text); err == nil {
+			h.clearPendingInput(chatID)
+			h.handleAddPushups(ctx, userID, username, chatID, count)
+			return
+		}
+
+		// Не число - сообщаем об ошибке
+		msg := tgbotapi.NewMessage(chatID, "Пожалуйста, введите число:")
+		h.bot.Send(msg)
+		return
+	}
 
 	// Маршрутизация команд
 	switch update.Message.Text {
@@ -80,13 +82,13 @@ func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
 	case "Добавить отжимания":
 		h.requestPushupCount(chatID) // Запрос количества отжиманий
 	case "Статистика за сегодня":
-		h.handleTodayStat(ctx, userID, chatID) // Статистика за сегодня
+		h.handleTodayLeaderboard(ctx, chatID) // Статистика за сегодня
 	case "Статистика за всё время":
 		h.handleTotalStat(ctx, userID, chatID) // Общая статистика
 	default:
 		msg := tgbotapi.NewMessage(chatID, "Неизвестная команда. Используйте меню.")
-        msg.ReplyMarkup = mainKeyboard()
-        h.bot.Send(msg)
+		msg.ReplyMarkup = mainKeyboard()
+		h.bot.Send(msg)
 	}
 }
 
@@ -96,7 +98,7 @@ func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
 // - userID: идентификатор пользователя
 // - chatID: идентификатор чата
 // - count: количество отжиманий для добавления
-func (h *BotHandler) handleAddPushups(ctx context.Context, userID int64, chatID int64, count int) {
+func (h *BotHandler) handleAddPushups(ctx context.Context, userID int64, username string, chatID int64, count int) {
 
 	// Валидацию ввода
 
@@ -108,7 +110,7 @@ func (h *BotHandler) handleAddPushups(ctx context.Context, userID int64, chatID 
 	}
 
 	// Вызываем сервис для добавления отжиманий
-	response, err := h.service.AddPushups(ctx, userID, count)
+	response, err := h.service.AddPushups(ctx, userID, username, count)
 	if err != nil {
 		log.Printf("Ошибка при добавлении отжиманий: %v", err)
 		msg := tgbotapi.NewMessage(chatID, "Произошла ошибка. Попробуйте позже.")
@@ -117,7 +119,7 @@ func (h *BotHandler) handleAddPushups(ctx context.Context, userID int64, chatID 
 	}
 
 	// Логирование действий пользователя:
-	log.Printf("User %d added %d pushups", userID, count)
+	log.Printf("Username%s UserID %d added %d pushups", username, userID, count)
 
 	// Отправляем пользователю результат операции
 	msg := tgbotapi.NewMessage(chatID, response)
@@ -167,58 +169,77 @@ func (h *BotHandler) handleTotalStat(ctx context.Context, userID int64, chatID i
 	h.bot.Send(msg)
 }
 
+func (h *BotHandler) handleTodayLeaderboard(ctx context.Context, chatID int64) {
+    leaderboard, err := h.service.GetTodayLeaderboard(ctx)
+    if err != nil {
+        log.Printf("Ошибка получения рейтинга: %v", err)
+        msg := tgbotapi.NewMessage(chatID, "Ошибка загрузки рейтинга")
+        h.bot.Send(msg)
+        return
+    }
+    
+    var response strings.Builder
+    response.WriteString("🏆 Рейтинг за сегодня:\n\n")
+    for _, item := range leaderboard {
+        response.WriteString(fmt.Sprintf("%d. %s: %d\n", item.Rank, item.Username, item.Count))
+    }
+    
+    msg := tgbotapi.NewMessage(chatID, response.String())
+    h.bot.Send(msg)
+}
+
 // requestPushupCount запрашивает у пользователя количество отжиманий
 // Параметры:
 // - chatID: идентификатор чата
 func (h *BotHandler) requestPushupCount(chatID int64) {
 	// Устанавливаем ожидание ввода на 2 минуты
-    h.setPendingInput(chatID, time.Now().Add(inputTimeout))
-    
-    msg := tgbotapi.NewMessage(chatID, "Введите количество отжиманий:")
-    msg.ReplyMarkup = tgbotapi.NewRemoveKeyboard(true)
-    h.bot.Send(msg)
+	h.setPendingInput(chatID, time.Now().Add(inputTimeout))
+
+	msg := tgbotapi.NewMessage(chatID, "Введите количество отжиманий:")
+	msg.ReplyMarkup = tgbotapi.NewRemoveKeyboard(true)
+	h.bot.Send(msg)
 }
 
 // setPendingInput сохраняет время ожидания ввода для указанного чата
 func (h *BotHandler) setPendingInput(chatID int64, expiry time.Time) {
-    h.pendingInputs.Store(chatID, expiry)
+	h.pendingInputs.Store(chatID, expiry)
 }
 
 // getPendingInput возвращает время истечения ожидания ввода для чата
 func (h *BotHandler) getPendingInput(chatID int64) (time.Time, bool) {
-    value, ok := h.pendingInputs.Load(chatID)
-    if !ok {
-        return time.Time{}, false
-    }
-    return value.(time.Time), true
+	value, ok := h.pendingInputs.Load(chatID)
+	if !ok {
+		return time.Time{}, false
+	}
+	return value.(time.Time), true
 }
 
 // clearPendingInput удаляет состояние ожидания для указанного чата
 func (h *BotHandler) clearPendingInput(chatID int64) {
-    h.pendingInputs.Delete(chatID)
+	h.pendingInputs.Delete(chatID)
 }
 
 // cleanupExpiredInputs периодически очищает устаревшие ожидания
 func (h *BotHandler) CleanupExpiredInputs() {
-    for {
-        time.Sleep(1 * time.Second) // Проверяем чаще - каждую секунду
-        
-        now := time.Now()
-        h.pendingInputs.Range(func(key, value interface{}) bool {
-            expiry := value.(time.Time)
-            if now.After(expiry) {
-                chatID := key.(int64)
-                h.pendingInputs.Delete(key)
-                
-                // Отправляем сообщение об отмене
-                msg := tgbotapi.NewMessage(chatID, "⌛ Ввод отменен по таймауту (10 секунд).")
-                msg.ReplyMarkup = mainKeyboard()
-                if _, err := h.bot.Send(msg); err != nil {
-                    log.Printf("Ошибка отправки сообщения об отмене: %v", err)
-                }
-                log.Printf("Отменен ввод для чата %d по таймауту", chatID)
-            }
-            return true
-        })
-    }
+	for {
+		time.Sleep(1 * time.Second) // Проверяем чаще - каждую секунду
+
+		now := time.Now()
+		h.pendingInputs.Range(func(key, value interface{}) bool {
+			expiry := value.(time.Time)
+			if now.After(expiry) {
+				chatID := key.(int64)
+				h.pendingInputs.Delete(key)
+
+				// Отправляем сообщение об отмене
+				msg := tgbotapi.NewMessage(chatID, "⌛ Ввод отменен по таймауту (10 секунд).")
+				msg.ReplyMarkup = mainKeyboard()
+				if _, err := h.bot.Send(msg); err != nil {
+					log.Printf("Ошибка отправки сообщения об отмене: %v", err)
+				}
+				log.Printf("Отменен ввод для чата %d по таймауту", chatID)
+			}
+			return true
+		})
+	}
 }

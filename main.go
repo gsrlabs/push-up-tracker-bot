@@ -3,7 +3,7 @@ package main // Объявляем пакет main - точка входа в п
 import (
 	"context"
 	"fmt"
-	"log" // Пакет для логирования ошибок
+	"log"
 	"os"
 	"sync"
 	"time"
@@ -56,7 +56,7 @@ func main() {
 
 	// 4. Получение URL базы данных из переменных окружения
 	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" { // Исправлено: проверка dbURL вместо botToken
+	if dbURL == "" { 
 		log.Fatal("DATABASE_URL не указан. Установите переменную окружения DATABASE_URL")
 	}
 
@@ -74,7 +74,7 @@ func main() {
 	dbPool.Config().MaxConns = 10
 	// Максимальное время простаивания соединения
 	dbPool.Config().MaxConnIdleTime = 30 * time.Minute
-
+	
 	// 7. Инициализация слоев приложения (архитектура Clean Architecture)
 
 	// Репозиторий для работы с данными отжиманий
