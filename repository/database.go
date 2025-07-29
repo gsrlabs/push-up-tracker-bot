@@ -15,6 +15,12 @@ type PushupRepository struct {
 	pool *pgxpool.Pool // Пул соединений с PostgreSQL
 }
 
+type LeaderboardItem struct {
+    Rank     int    // Будет добавляться в сервисе
+    Username string
+    Count    int
+}
+
 // NewPushupRepository создает новый экземпляр репозитория
 // Принимает:
 // - pool: пул соединений с базой данных
@@ -102,15 +108,10 @@ func (r *PushupRepository) GetTotalStat(ctx context.Context, userID int64) (int,
 	return total, err
 }
 
-// Similar methods for:
-// - GetTotalLeaderboard
-// - GetMaxRepsLeaderboard
 
-type LeaderboardItem struct {
-    Rank     int    // Будет добавляться в сервисе
-    Username string
-    Count    int
-}
+
+
+
 
 // New methods for leaderboards
 func (r *PushupRepository) GetTodayLeaderboard(ctx context.Context) ([]LeaderboardItem, error) {
@@ -139,3 +140,9 @@ func (r *PushupRepository) GetTodayLeaderboard(ctx context.Context) ([]Leaderboa
     return items, nil
 }
 
+func (r *PushupRepository) GetUserMaxReps(ctx context.Context, userID int64) (int, error) {
+	query := `SELECT max_reps FROM users WHERE user_id = $1`
+	var maxReps int
+	err := r.pool.QueryRow(ctx, query, userID).Scan(&maxReps)
+	return maxReps, err
+}
