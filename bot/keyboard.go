@@ -21,15 +21,15 @@ func mainKeyboard() tgbotapi.ReplyKeyboardMarkup {
 	return tgbotapi.NewReplyKeyboard(
 		// Первый ряд кнопок
 		tgbotapi.NewKeyboardButtonRow(
-			tgbotapi.NewKeyboardButton("Добавить отжимания за день"),
+			tgbotapi.NewKeyboardButton("+ за день"),
 		),
 		// Второй ряд кнопок
 		tgbotapi.NewKeyboardButtonRow(
-			tgbotapi.NewKeyboardButton("Добавить отжимания за раз"),
+			tgbotapi.NewKeyboardButton("+ за один подход"),
 		),
 		// Третий ряд кнопок
 		tgbotapi.NewKeyboardButtonRow(
-			tgbotapi.NewKeyboardButton("Статистика за сегодня"),
+			tgbotapi.NewKeyboardButton("Статистика"),
 		),
 	)
 }

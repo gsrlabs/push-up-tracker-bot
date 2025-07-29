@@ -76,12 +76,13 @@ func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
 	switch update.Message.Text {
 	case "/start":
 		h.handleStart(chatID)
-	case "Добавить отжимания за день":
+	case "+ за день":
 		h.requestPushupCount(chatID, inputTypeDaily)
-	case "Добавить отжимания за раз":
+	case "+ за один подход":
 		h.requestPushupCount(chatID, inputTypeMaxReps)
-	case "Статистика за сегодня":
+	case "Статистика":
 		h.handleTodayStat(ctx, userID, chatID)
+		h.handleTotalStat(ctx, userID, chatID)
 		h.handleTodayLeaderboard(ctx, chatID)
 	default:
 		msg := tgbotapi.NewMessage(chatID, "Неизвестная команда. Используйте меню.")
@@ -113,7 +114,7 @@ func (h *BotHandler) handleAddPushups(ctx context.Context, userID int64, usernam
 		response = fmt.Sprintf("🔔Ваша дневная норма составляет: %d\n", result.DailyNorm)
 	}
 
-	response += fmt.Sprintf("✅Добавлено: %d отжиманий\n📊Ваш прогресс: %d/%d", count, result.TotalToday, result.DailyNorm)
+	response += fmt.Sprintf("✅Добавлено: %d отжиманий\n📈Ваш прогресс: %d/%d", count, result.TotalToday, result.DailyNorm)
 
 	if result.TotalToday >= result.DailyNorm {
 		response += "\n🎯Вы выполнили дневную норму!"
@@ -139,7 +140,54 @@ func (h *BotHandler) handleTodayStat(ctx context.Context, userID int64, chatID i
 	}
 
 	dailyNorm := service.CalculateDailyNorm(maxReps)
-	msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("Сегодня вы отжались %d %s.\nДневная норма: %d/%d", total,formatTimesWord(total), total, dailyNorm))
+	msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("📊Сегодня вы отжались %d/%d %s.\n%s\n", total, dailyNorm, formatTimesWord(total),generateProgressBar(total, dailyNorm, 10)))
+	msg.ReplyMarkup = mainKeyboard()
+	h.bot.Send(msg)
+}
+
+func generateProgressBar(current, total, barWidth int) string {
+	if total <= 0 || barWidth <= 0 {
+		return "Прогресс: [не определён]"
+	}
+
+	percentage := float64(current) / float64(total)
+	clamped := percentage
+	if clamped > 1 {
+		clamped = 1
+	}
+
+	filled := int(clamped * float64(barWidth))
+	if filled > barWidth {
+		filled = barWidth
+	}
+	if filled < 0 {
+		filled = 0
+	}
+	empty := barWidth - filled
+
+	bar := strings.Repeat("🔋", filled) + strings.Repeat("🪫", empty) // или  ░ ▒ ▓ █
+	percentText := int(percentage * 100)
+
+	// Добавим бонусную метку если перевыполнил
+	suffix := ""
+	if percentage > 1 {
+		suffix = " 🏆"
+	}
+
+	return fmt.Sprintf("Прогресс: [%s] %d%%%s", bar, percentText, suffix)
+}
+
+
+func (h *BotHandler) handleTotalStat(ctx context.Context, userID int64, chatID int64) {
+	total, err := h.service.GetTotalStat(ctx, userID)
+	if err != nil {
+		log.Printf("Ошибка при получении статистики: %v", err)
+		msg := tgbotapi.NewMessage(chatID, "Произошла ошибка. Попробуйте позже.")
+		h.bot.Send(msg)
+		return
+	}
+
+	msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("💪За все время отжались: %d %s", total, formatTimesWord(total)))
 	msg.ReplyMarkup = mainKeyboard()
 	h.bot.Send(msg)
 }

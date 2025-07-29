@@ -109,10 +109,6 @@ func (r *PushupRepository) GetTotalStat(ctx context.Context, userID int64) (int,
 }
 
 
-
-
-
-
 // New methods for leaderboards
 func (r *PushupRepository) GetTodayLeaderboard(ctx context.Context) ([]LeaderboardItem, error) {
     query := `
