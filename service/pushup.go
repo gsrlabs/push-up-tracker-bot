@@ -22,17 +22,24 @@ func NewPushupService(repo repository.PushupRepository, cache *cache.TodayCache)
 	return &PushupService{repo: repo, cache: cache}
 }
 
-func (s *PushupService) AddPushups(ctx context.Context, userID int64, username string, count int) (*AddPushupsResult, error) {
+func (s *PushupService) AddPushups(ctx context.Context, userID int64, username string, count int, isMaxReps bool) (*AddPushupsResult, error) {
 	if err := s.repo.EnsureUser(ctx, userID, username); err != nil {
 		return nil, err
 	}
 	today := time.Now().UTC().Truncate(24 * time.Hour)
 	
-	if err := s.repo.AddPushups(ctx, userID, today, count); err != nil {
-		return nil, fmt.Errorf("ошибка сохранения в БД: %w", err)
+	// Используем разные методы для разных типов добавления
+	if isMaxReps {
+		if err := s.repo.AddMaxPushups(ctx, userID, today, count); err != nil {
+			return nil, fmt.Errorf("ошибка сохранения в БД: %w", err)
+		}
+	} else {
+		if err := s.repo.AddPushups(ctx, userID, today, count); err != nil {
+			return nil, fmt.Errorf("ошибка сохранения в БД: %w", err)
+		}
 	}
+	
 	totalToday := s.cache.Add(userID, count)
-
 	maxReps, err := s.repo.GetUserMaxReps(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -43,6 +50,11 @@ func (s *PushupService) AddPushups(ctx context.Context, userID int64, username s
 		TotalToday: totalToday,
 		DailyNorm:  dailyNorm,
 	}, nil
+}
+
+// ResetMaxReps сбрасывает max_reps пользователя на значение по умолчанию
+func (s *PushupService) ResetMaxReps(ctx context.Context, userID int64) error {
+    return s.repo.ResetMaxReps(ctx, userID)
 }
 
 func (s *PushupService) GetTodayStat(ctx context.Context, userID int64) (int, error) {

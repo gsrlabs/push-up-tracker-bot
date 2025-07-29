@@ -49,6 +49,22 @@ func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
 	userID := update.Message.From.ID
 	chatID := update.Message.Chat.ID
 
+	// Обработка команды /reset
+    if update.Message.Text == "Сброс" {
+
+        if err := h.service.ResetMaxReps(ctx, userID); err != nil {
+            log.Printf("Ошибка сброса max_reps: %v", err)
+            msg := tgbotapi.NewMessage(chatID, "Произошла ошибка при сбросе. Попробуйте позже.")
+            h.bot.Send(msg)
+            return
+        }
+
+        msg := tgbotapi.NewMessage(chatID, "✅ Дневная норма сброшена до значения по умолчанию (40)")
+        msg.ReplyMarkup = mainKeyboard()
+        h.bot.Send(msg)
+        return
+    }
+
 	if input, ok := h.getPendingInput(chatID); ok {
 		if time.Now().After(input.expiry) {
 			h.clearPendingInput(chatID)
@@ -99,7 +115,8 @@ func (h *BotHandler) handleAddPushups(ctx context.Context, userID int64, usernam
 		return
 	}
 
-	result, err := h.service.AddPushups(ctx, userID, username, count)
+	isMaxReps := (inputType == inputTypeMaxReps)
+	result, err := h.service.AddPushups(ctx, userID, username, count, isMaxReps)
 	if err != nil {
 		log.Printf("Ошибка при добавлении отжиманий: %v", err)
 		msg := tgbotapi.NewMessage(chatID, "Произошла ошибка. Попробуйте позже.")
@@ -114,7 +131,7 @@ func (h *BotHandler) handleAddPushups(ctx context.Context, userID int64, usernam
 		response = fmt.Sprintf("🔔Ваша дневная норма составляет: %d\n", result.DailyNorm)
 	}
 
-	response += fmt.Sprintf("✅Добавлено: %d отжиманий\n📈Ваш прогресс: %d/%d", count, result.TotalToday, result.DailyNorm)
+	response += fmt.Sprintf("✅Добавлено: %d отжиманий!\n📈Товой прогресс: %d/%d", count, result.TotalToday, result.DailyNorm)
 
 	if result.TotalToday >= result.DailyNorm {
 		response += "\n🎯Вы выполнили дневную норму!"

@@ -34,7 +34,7 @@ const (
 //   дневную норму (целое число, кратное 5)
 func CalculateDailyNorm(maxReps int) int {
 	// Защита от нереалистичных значений
-	if maxReps < 1 {
+	if maxReps <= 0 {
 		return MinDailyPushups
 	}
 	if maxReps > 100 {

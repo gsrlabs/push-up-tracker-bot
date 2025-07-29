@@ -44,33 +44,30 @@ func (r *PushupRepository) EnsureUser(ctx context.Context, userID int64, usernam
     return err
 }
 
-// AddPushups добавляет указанное количество отжиманий для пользователя на указанную дату с учетом max_reps
-// Если запись для пользователя и даты уже существует - увеличивает существующее значение
-//
-// Параметры:
-// - ctx: контекст выполнения
-// - userID: идентификатор пользователя
-// - date: дата (обрезается до дня)
-// - count: количество отжиманий для добавления
-//
-// Возвращает:
-// - error: ошибка операции или nil
+
 func (r *PushupRepository) AddPushups(ctx context.Context, userID int64, date time.Time, count int) error {
-    query := `
-    WITH new_pushups AS (
-        INSERT INTO pushups (user_id, date, count)
-        VALUES ($1, $2, $3)
-        RETURNING user_id, count
-    )
-    UPDATE users u
-    SET 
-        max_reps = GREATEST(u.max_reps, np.count),
-        last_updated = CURRENT_TIMESTAMP
-    FROM new_pushups np
-    WHERE u.user_id = np.user_id`
-    
-    _, err := r.pool.Exec(ctx, query, userID, date, count)
-    return err
+	query := `INSERT INTO pushups (user_id, date, count) VALUES ($1, $2, $3)`
+	_, err := r.pool.Exec(ctx, query, userID, date, count)
+	return err
+}
+
+// Добавление максимальных отжиманий (с обновлением max_reps)
+func (r *PushupRepository) AddMaxPushups(ctx context.Context, userID int64, date time.Time, count int) error {
+	query := `
+	WITH new_pushups AS (
+		INSERT INTO pushups (user_id, date, count)
+		VALUES ($1, $2, $3)
+		RETURNING user_id, count
+	)
+	UPDATE users u
+	SET 
+		max_reps = GREATEST(u.max_reps, np.count),
+		last_updated = CURRENT_TIMESTAMP
+	FROM new_pushups np
+	WHERE u.user_id = np.user_id`
+	
+	_, err := r.pool.Exec(ctx, query, userID, date, count)
+	return err
 }
 
 // GetTodayStat возвращает суммарное количество отжиманий пользователя за указанную дату
@@ -141,4 +138,11 @@ func (r *PushupRepository) GetUserMaxReps(ctx context.Context, userID int64) (in
 	var maxReps int
 	err := r.pool.QueryRow(ctx, query, userID).Scan(&maxReps)
 	return maxReps, err
+}
+
+
+func (r *PushupRepository) ResetMaxReps(ctx context.Context, userID int64) error {
+    query := `UPDATE users SET max_reps = 0 WHERE user_id = $1`
+    _, err := r.pool.Exec(ctx, query, userID)
+    return err
 }

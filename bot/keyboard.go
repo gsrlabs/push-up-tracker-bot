@@ -29,6 +29,7 @@ func mainKeyboard() tgbotapi.ReplyKeyboardMarkup {
 		),
 		// Третий ряд кнопок
 		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Сброс"),
 			tgbotapi.NewKeyboardButton("Статистика"),
 		),
 	)
