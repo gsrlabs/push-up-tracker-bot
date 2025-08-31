@@ -3,8 +3,9 @@ package main // Объявляем пакет main - точка входа в п
 import (
 	"context"
 	"fmt"
-	"log" // Пакет для логирования ошибок
+	"log"
 	"os"
+	
 	"sync"
 	"time"
 
@@ -45,6 +46,13 @@ func main() {
 		log.Panic(err) // Аварийное завершение при ошибке инициализации
 	}
 
+	// Проверяем подключение к боту
+    if _, err := telegramBot.GetMe(); err != nil {
+        log.Fatalf("Ошибка подключения к боту: %v", err)
+    }
+
+    log.Println("✅ Бот успешно подключен")
+
 	// 3. Настройка режима отладки
 	// В режиме отладки бот выводит подробную информацию о своих действиях
 	// Полезно для разработки, но в продакшене лучше отключить
@@ -56,7 +64,7 @@ func main() {
 
 	// 4. Получение URL базы данных из переменных окружения
 	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" { // Исправлено: проверка dbURL вместо botToken
+	if dbURL == "" { 
 		log.Fatal("DATABASE_URL не указан. Установите переменную окружения DATABASE_URL")
 	}
 
@@ -74,7 +82,7 @@ func main() {
 	dbPool.Config().MaxConns = 10
 	// Максимальное время простаивания соединения
 	dbPool.Config().MaxConnIdleTime = 30 * time.Minute
-
+	
 	// 7. Инициализация слоев приложения (архитектура Clean Architecture)
 
 	// Репозиторий для работы с данными отжиманий
@@ -91,7 +99,10 @@ func main() {
 
 	// Обработчик Telegram бота
 	botHandler := bot.NewBotHandler(telegramBot, pushupService)
-     go botHandler.CleanupExpiredInputs() 
+
+	
+	
+     //go botHandler.CleanupExpiredInputs() 
      // Запускаем фоновую очистку
 	// 8. Настройка получения обновлений от Telegram
 	// NewUpdate(0) - получаем все обновления с момента запуска
@@ -102,6 +113,11 @@ func main() {
   
 	// Получение канала обновлений
 	updates := telegramBot.GetUpdatesChan(u)
+
+	reminderService := service.NewReminderService(pushupService, telegramBot)
+	reminderService.StartReminderChecker()
+
+	log.Println("Сервис напоминаний запущен")
 
 	// WaitGroup для ожидания завершения всех обработчиков
 	var wg sync.WaitGroup
@@ -117,10 +133,13 @@ func main() {
 
 			// Обработка обновления
 			botHandler.HandleUpdate(update)
+			botHandler.CleanupExpiredInputs(update)
 
 		}(update)
 
 	}
+
+	
 
 	// Ожидание завершения всех обработчиков
 	wg.Wait()
