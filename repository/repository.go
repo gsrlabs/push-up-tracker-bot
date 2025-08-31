@@ -4,10 +4,11 @@ package repository
 
 import (
 	"context"
+	"fmt"
+
 	"time"
-	
+
 	"github.com/jackc/pgx/v5/pgxpool"
-	
 )
 
 // PushupRepository предоставляет методы для работы с данными отжиманий в БД
@@ -22,21 +23,16 @@ type LeaderboardItem struct {
 }
 
 // NewPushupRepository создает новый экземпляр репозитория
-// Принимает:
-// - pool: пул соединений с базой данных
-// Возвращает:
-// - *PushupRepository: инициализированный репозиторий
 func NewPushupRepository(pool *pgxpool.Pool) *PushupRepository {
 
 	return &PushupRepository{pool: pool}
 }
 
-
 // EnsureUser создает или обновляет пользователя
 func (r *PushupRepository) EnsureUser(ctx context.Context, userID int64, username string) error {
     query := `
-    INSERT INTO users (user_id, username)
-    VALUES ($1, $2)
+    INSERT INTO users (user_id, username, daily_norm)
+    VALUES ($1, $2, 40)
     ON CONFLICT (user_id) 
     DO UPDATE SET username = EXCLUDED.username`
     
@@ -52,7 +48,7 @@ func (r *PushupRepository) AddPushups(ctx context.Context, userID int64, date ti
 }
 
 // Добавление максимальных отжиманий (с обновлением max_reps)
-func (r *PushupRepository) AddMaxPushups(ctx context.Context, userID int64, date time.Time, count int) error {
+func (r *PushupRepository) AddMaxPushups(ctx context.Context, userID int64, date time.Time, count int, dailyNorm int) error {
 	query := `
 	WITH new_pushups AS (
 		INSERT INTO pushups (user_id, date, count)
@@ -62,25 +58,16 @@ func (r *PushupRepository) AddMaxPushups(ctx context.Context, userID int64, date
 	UPDATE users u
 	SET 
 		max_reps = GREATEST(u.max_reps, np.count),
+        daily_norm = $4,
 		last_updated = CURRENT_TIMESTAMP
 	FROM new_pushups np
 	WHERE u.user_id = np.user_id`
 	
-	_, err := r.pool.Exec(ctx, query, userID, date, count)
+	_, err := r.pool.Exec(ctx, query, userID, date, count, dailyNorm)
 	return err
 }
 
 // GetTodayStat возвращает суммарное количество отжиманий пользователя за указанную дату
-// Если данных нет - возвращает 0
-//
-// Параметры:
-// - ctx: контекст выполнения
-// - userID: идентификатор пользователя
-// - date: дата для статистики
-//
-// Возвращает:
-// - int: количество отжиманий
-// - error: ошибка операции или nil
 func (r *PushupRepository) GetTodayStat(ctx context.Context, userID int64, date time.Time) (int, error) {
 	query := `SELECT COALESCE(SUM(count), 0) FROM pushups WHERE user_id = $1 AND date = $2`
 	var total int
@@ -89,15 +76,6 @@ func (r *PushupRepository) GetTodayStat(ctx context.Context, userID int64, date 
 }
 
 // GetTotalStat возвращает суммарное количество отжиманий пользователя за все время
-// Если данных нет - возвращает 0
-//
-// Параметры:
-// - ctx: контекст выполнения
-// - userID: идентификатор пользователя
-//
-// Возвращает:
-// - int: общее количество отжиманий
-// - error: ошибка операции или nil
 func (r *PushupRepository) GetTotalStat(ctx context.Context, userID int64) (int, error) {
 	query := `SELECT COALESCE(SUM(count), 0) FROM pushups WHERE user_id = $1`
 	var total int
@@ -140,9 +118,66 @@ func (r *PushupRepository) GetUserMaxReps(ctx context.Context, userID int64) (in
 	return maxReps, err
 }
 
+func (r *PushupRepository) SetDailyNorm(ctx context.Context, userID int64, dailyNorm int) error {
+    query := `UPDATE users SET daily_norm = $1 WHERE user_id = $2`
+    _, err := r.pool.Exec(ctx, query, dailyNorm, userID)
+    return err
+}
 
+// GetDailyNorm возвращает дневную норму пользователя
+func (r *PushupRepository) GetDailyNorm(ctx context.Context, userID int64) (int, error) {
+    query := `SELECT daily_norm FROM users WHERE user_id = $1`
+    var dailyNorm int
+    err := r.pool.QueryRow(ctx, query, userID).Scan(&dailyNorm)
+    return dailyNorm, err
+}
+
+// ResetMaxReps сбрасывает max_reps и daily_norm пользователя на значение по умолчанию
 func (r *PushupRepository) ResetMaxReps(ctx context.Context, userID int64) error {
-    query := `UPDATE users SET max_reps = 0 WHERE user_id = $1`
+    query := `UPDATE users SET max_reps = 0, daily_norm = 40 WHERE user_id = $1`
     _, err := r.pool.Exec(ctx, query, userID)
     return err
+}
+
+func (r *PushupRepository) Pool() *pgxpool.Pool {
+	return r.pool
+}
+
+// Добавляем методы для управления напоминаниями
+func (r *PushupRepository) DisableNotifications(ctx context.Context, userID int64) error {
+    query := `UPDATE users SET notifications_enabled = FALSE WHERE user_id = $1`
+    _, err := r.pool.Exec(ctx, query, userID)
+    return err
+}
+
+func (r *PushupRepository) EnableNotifications(ctx context.Context, userID int64) error {
+    query := `UPDATE users SET notifications_enabled = TRUE WHERE user_id = $1`
+    _, err := r.pool.Exec(ctx, query, userID)
+    return err
+}
+
+func (r *PushupRepository) GetNotificationsStatus(ctx context.Context, userID int64) (bool, error) {
+    query := `SELECT notifications_enabled FROM users WHERE user_id = $1`
+    var enabled bool
+    err := r.pool.QueryRow(ctx, query, userID).Scan(&enabled)
+    return enabled, err
+}
+
+// GetFirstWorkoutDate возвращает дату первой тренировки пользователя
+func (r *PushupRepository) GetFirstWorkoutDate(ctx context.Context, userID int64) (time.Time, error) {
+    query := `
+        SELECT COALESCE(MIN(date), '0001-01-01'::DATE) 
+        FROM pushups 
+        WHERE user_id = $1 
+        AND count > 0
+    `
+    
+    var firstDate time.Time
+    err := r.pool.QueryRow(ctx, query, userID).Scan(&firstDate)
+    
+    if err != nil {
+        return time.Time{}, fmt.Errorf("ошибка получения даты первой тренировки: %w", err)
+    }
+    
+    return firstDate, nil
 }

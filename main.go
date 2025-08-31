@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	
 	"sync"
 	"time"
 
@@ -44,6 +45,13 @@ func main() {
 	if err != nil {
 		log.Panic(err) // Аварийное завершение при ошибке инициализации
 	}
+
+	// Проверяем подключение к боту
+    if _, err := telegramBot.GetMe(); err != nil {
+        log.Fatalf("Ошибка подключения к боту: %v", err)
+    }
+
+    log.Println("✅ Бот успешно подключен")
 
 	// 3. Настройка режима отладки
 	// В режиме отладки бот выводит подробную информацию о своих действиях
@@ -91,7 +99,10 @@ func main() {
 
 	// Обработчик Telegram бота
 	botHandler := bot.NewBotHandler(telegramBot, pushupService)
-     go botHandler.CleanupExpiredInputs() 
+
+	
+	
+     //go botHandler.CleanupExpiredInputs() 
      // Запускаем фоновую очистку
 	// 8. Настройка получения обновлений от Telegram
 	// NewUpdate(0) - получаем все обновления с момента запуска
@@ -102,6 +113,11 @@ func main() {
   
 	// Получение канала обновлений
 	updates := telegramBot.GetUpdatesChan(u)
+
+	reminderService := service.NewReminderService(pushupService, telegramBot)
+	reminderService.StartReminderChecker()
+
+	log.Println("Сервис напоминаний запущен")
 
 	// WaitGroup для ожидания завершения всех обработчиков
 	var wg sync.WaitGroup
@@ -117,10 +133,13 @@ func main() {
 
 			// Обработка обновления
 			botHandler.HandleUpdate(update)
+			botHandler.CleanupExpiredInputs(update)
 
 		}(update)
 
 	}
+
+	
 
 	// Ожидание завершения всех обработчиков
 	wg.Wait()
