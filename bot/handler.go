@@ -40,6 +40,7 @@ func NewBotHandler(bot *tgbotapi.BotAPI, service *service.PushupService) *BotHan
 }
 
 func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
+	ui.StartKeyboard()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
@@ -52,7 +53,7 @@ func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
 	chatID := update.Message.Chat.ID
 
 	// Обработка команды /reset
-	if update.Message.Text == "Сброс" {
+	if update.Message.Text == "🔄 Сброс" {
 
 		if err := h.service.ResetMaxReps(ctx, userID); err != nil {
 			log.Printf("Ошибка сброса max_reps: %v", err)
@@ -105,11 +106,11 @@ func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
 		h.handleStart(ctx, userID, chatID, notificationsEnabled)
 	case "Добавить отжимания":
 		h.requestPushupCount(chatID, inputTypeDaily)
-	case "Определить норму":
+	case "🎯 Определить норму":
 		h.requestPushupCount(chatID, inputTypeMaxReps)
-	case "Установить норму":
+	case "📝 Установить норму":
 		h.requestCustomNorm(chatID)
-	case "Статистика":
+	case "📊 Статистика":
 		h.handleTodayStat(ctx, userID, chatID, notificationsEnabled)
 		h.handleTotalStat(ctx, userID, chatID, notificationsEnabled)
 		h.handleTodayLeaderboard(ctx, chatID)
@@ -117,6 +118,19 @@ func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
 		h.handleToggleNotifications(ctx, userID, chatID, false)
 	case "🔔 Включить напоминания":
 		h.handleToggleNotifications(ctx, userID, chatID, true)
+	 case "🛠️ Настройки":
+        // Показываем клавиатуру настроек
+        notificationsEnabled, _ := h.service.GetNotificationsStatus(ctx, userID)
+        msg := tgbotapi.NewMessage(chatID, "Выберите действие:")
+        msg.ReplyMarkup = ui.SettingsKeyboard(notificationsEnabled)
+        h.bot.Send(msg)
+        
+    case "⬅️ Назад":
+        // Возвращаемся к основной клавиатуре
+        notificationsEnabled, _ := h.service.GetNotificationsStatus(ctx, userID)
+        msg := tgbotapi.NewMessage(chatID, "Главное меню:")
+        msg.ReplyMarkup = ui.MainKeyboard(notificationsEnabled)
+        h.bot.Send(msg)	
 	default:
 		msg := tgbotapi.NewMessage(chatID, "Неизвестная команда. Используйте меню.")
 		msg.ReplyMarkup = ui.MainKeyboard(notificationsEnabled)
@@ -148,13 +162,26 @@ func (h *BotHandler) handleAddPushups(ctx context.Context, userID int64, usernam
 		response = fmt.Sprintf("🔔Твоя дневная норма установлена: %d\n", result.DailyNorm)
 	}
 
-	response += fmt.Sprintf("✅Добавлено: %d отжиманий!\n📈Товой прогресс: %d/%d", count, result.TotalToday, result.DailyNorm)
+	response += fmt.Sprintf("✅Добавлено: %d отжиманий!\n📈Товой прогресс: %d/%d\n", count, result.TotalToday, result.DailyNorm)
 
-	if result.TotalToday >= result.DailyNorm {
-		response += "\n🎯Ты выполнил дневную норму!"
+	// Проверяем выполнение нормы через кеш
+	hasCompleted, firstCompleter := h.service.CheckNormCompletion(result.DailyNorm)
+
+	var responseFirstCompleter string
+	
+	// Мотивационное сообщение
+	if !hasCompleted {
+		responseFirstCompleter = "❌ Никто еще не выполнил норму сегодня.\nМожет, ты будешь первым? 💪\n\n"
+	} else {
+		responseFirstCompleter = fmt.Sprintf("🎯 %s уже выполнил норму!\nА ты не отставай, присоединяйся! 🚀\n\n", firstCompleter)
 	}
 
-	msg := tgbotapi.NewMessage(chatID, response)
+	if result.TotalToday >= result.DailyNorm {
+		response += "\n🎯Ты выполнил дневную норму!\n"
+		responseFirstCompleter = ""
+	}
+
+	msg := tgbotapi.NewMessage(chatID, response+responseFirstCompleter)
 	msg.ReplyMarkup = ui.MainKeyboard(notEnable)
 	h.bot.Send(msg)
 }
@@ -176,7 +203,9 @@ func (h *BotHandler) handleTodayStat(ctx context.Context, userID int64, chatID i
 		return
 	}
 
-	msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("📊Сегодня ты отжался %d/%d %s.\n%s\n", total, dailyNorm, formatTimesWord(total), generateProgressBar(total, dailyNorm, 10)))
+	daylyStatText :=  fmt.Sprintf("📊Сегодня ты отжался %d/%d %s.\n%s\n", total, dailyNorm, formatTimesWord(total), generateProgressBar(total, dailyNorm, 10))
+
+	msg := tgbotapi.NewMessage(chatID, daylyStatText)
 	msg.ReplyMarkup = ui.MainKeyboard(notEnable)
 	h.bot.Send(msg)
 }

@@ -111,6 +111,17 @@ func (r *PushupRepository) GetTodayLeaderboard(ctx context.Context) ([]Leaderboa
     return items, nil
 }
 
+// GetUsername возвращает username пользователя
+func (r *PushupRepository) GetUsername(ctx context.Context, userID int64) (string, error) {
+	query := `SELECT username FROM users WHERE user_id = $1`
+	var username string
+	err := r.pool.QueryRow(ctx, query, userID).Scan(&username)
+	if err != nil {
+		return "", fmt.Errorf("ошибка получения username: %w", err)
+	}
+	return username, nil
+}
+
 func (r *PushupRepository) GetUserMaxReps(ctx context.Context, userID int64) (int, error) {
 	query := `SELECT max_reps FROM users WHERE user_id = $1`
 	var maxReps int

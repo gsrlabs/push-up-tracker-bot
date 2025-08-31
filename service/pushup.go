@@ -113,13 +113,32 @@ func (s *PushupService) GetUserMaxReps(ctx context.Context, userID int64) (int, 
 	return s.repo.GetUserMaxReps(ctx, userID)
 }
 
-
 func (s *PushupService) GetFirstWorkoutDate(ctx context.Context, userID int64) (string, error) {
    date, err := s.repo.GetFirstWorkoutDate(ctx, userID)
 	if err != nil{
 		return "", err
 	}
    return date.Format("02.01.2006"), nil
+}
+
+// service/pushup.go - добавляем метод
+
+// CheckNormCompletion проверяет выполнение дневной нормы через кеш
+func (s *PushupService) CheckNormCompletion(dailyNorm int) (bool, string) {
+	s.cache.Mu.RLock()
+	defer s.cache.Mu.RUnlock()
+	
+	for userID, count := range s.cache.Items {
+		if count >= dailyNorm {
+			// Получаем username пользователя
+			username, err := s.repo.GetUsername(context.Background(), userID)
+			if err != nil {
+				username = fmt.Sprintf("User%d", userID)
+			}
+			return true, username
+		}
+	}
+	return false, ""
 }
 
 // Добавляем методы для управления напоминаниями в сервисе
