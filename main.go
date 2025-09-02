@@ -114,7 +114,6 @@ func main() {
 	// Получение канала обновлений
 	updates := telegramBot.GetUpdatesChan(u)
 
-	go botHandler.CleanupExpiredInputs()
 
 	reminderService := service.NewReminderService(pushupService, telegramBot)
 	reminderService.StartReminderChecker()

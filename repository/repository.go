@@ -47,25 +47,6 @@ func (r *PushupRepository) AddPushups(ctx context.Context, userID int64, date ti
 	return err
 }
 
-// Добавление максимальных отжиманий (с обновлением max_reps)
-func (r *PushupRepository) AddMaxPushups(ctx context.Context, userID int64, date time.Time, count int, dailyNorm int) error {
-	query := `
-	WITH new_pushups AS (
-		INSERT INTO pushups (user_id, date, count)
-		VALUES ($1, $2, $3)
-		RETURNING user_id, count
-	)
-	UPDATE users u
-	SET 
-		max_reps = GREATEST(u.max_reps, np.count),
-        daily_norm = $4,
-		last_updated = CURRENT_TIMESTAMP
-	FROM new_pushups np
-	WHERE u.user_id = np.user_id`
-	
-	_, err := r.pool.Exec(ctx, query, userID, date, count, dailyNorm)
-	return err
-}
 
 // GetTodayStat возвращает суммарное количество отжиманий пользователя за указанную дату
 func (r *PushupRepository) GetTodayStat(ctx context.Context, userID int64, date time.Time) (int, error) {

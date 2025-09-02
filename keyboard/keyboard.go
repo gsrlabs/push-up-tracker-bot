@@ -42,21 +42,12 @@ func SettingsKeyboard(notificationsEnabled bool) tgbotapi.ReplyKeyboardMarkup {
 	)
 }
 
-// // SimpleKeyboard - упрощенная клавиатура (по желанию)
-// func SimpleKeyboard() tgbotapi.ReplyKeyboardMarkup {
-// 	return tgbotapi.NewReplyKeyboard(
-// 		tgbotapi.NewKeyboardButtonRow(
-// 			tgbotapi.NewKeyboardButton("Добавить отжимания"),
-// 			tgbotapi.NewKeyboardButton("🛠️ Настройки"),
-// 		),
-// 	)
-// }
 
-// func StartKeyboard() tgbotapi.ReplyKeyboardMarkup{
-// return tgbotapi.NewReplyKeyboard(
-// 		// Первый ряд кнопок
-// 		tgbotapi.NewKeyboardButtonRow(
-// 			tgbotapi.NewKeyboardButton("/start"),
-// 		),
-// 	)
-// }
+func CancelInlineKeyboard() tgbotapi.InlineKeyboardMarkup {
+	return tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("❌ Отменить", "cancel_input"),
+		),
+	)
+}
+
