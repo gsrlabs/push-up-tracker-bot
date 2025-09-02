@@ -25,6 +25,7 @@ const (
 type pendingInput struct {
 	expiry    time.Time
 	inputType inputType
+	messageID int
 }
 
 type BotHandler struct {
@@ -33,58 +34,47 @@ type BotHandler struct {
 	pendingInputs sync.Map
 }
 
-const inputTimeout = 10 * time.Second
+const inputTimeout = 2 * time.Minute
 
 func NewBotHandler(bot *tgbotapi.BotAPI, service *service.PushupService) *BotHandler {
 	return &BotHandler{bot: bot, service: service}
 }
 
 func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
-	ui.StartKeyboard()
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
+	// Игнорируем все обновления, кроме сообщений
 	if update.Message == nil {
 		return
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 
 	username := update.Message.From.UserName
 	userID := update.Message.From.ID
 	chatID := update.Message.Chat.ID
 
-	// Обработка команды /reset
-	if update.Message.Text == "🔄 Сброс" {
-
-		if err := h.service.ResetMaxReps(ctx, userID); err != nil {
-			log.Printf("Ошибка сброса max_reps: %v", err)
-			msg := tgbotapi.NewMessage(chatID, "Произошла ошибка при сбросе. Попробуйте позже.")
-			h.bot.Send(msg)
-			return
-		}
-
-		msg := tgbotapi.NewMessage(chatID, "✅ Дневная норма сброшена до значения по умолчанию (40)")
-		msg.ReplyMarkup = ui.MainKeyboard(true)
-		h.bot.Send(msg)
-		return
-	}
-
-	notificationsEnabled, err := h.service.GetNotificationsStatus(ctx, userID)
-	if err != nil {
-		log.Printf("Ошибка получения статуса уведомлений: %v", err)
-		notificationsEnabled = true
-	}
-
+	// Сначала проверяем, есть ли ожидаемый ввод для этого чата
 	if input, ok := h.getPendingInput(chatID); ok {
 		if time.Now().After(input.expiry) {
 			h.clearPendingInput(chatID)
 			msg := tgbotapi.NewMessage(chatID, "Ввод отменен по таймауту.")
-			msg.ReplyMarkup = ui.MainKeyboard(true)
+			notificationsEnabled, _ := h.service.GetNotificationsStatus(ctx, userID)
+			msg.ReplyMarkup = ui.MainKeyboard(notificationsEnabled)
 			h.bot.Send(msg)
 			return
 		}
 
+		// Обрабатываем ввод числа в режиме ожидания
 		if count, err := strconv.Atoi(update.Message.Text); err == nil {
 			h.clearPendingInput(chatID)
+			
+			// Получаем статус уведомлений для клавиатуры
+			notificationsEnabled, err := h.service.GetNotificationsStatus(ctx, userID)
+			if err != nil {
+				log.Printf("Ошибка получения статуса уведомлений: %v", err)
+				notificationsEnabled = true
+			}
+			
 			switch input.inputType {
 			case inputTypeDaily:
 				h.handleAddPushups(ctx, userID, username, chatID, count, inputTypeDaily, notificationsEnabled)
@@ -96,14 +86,39 @@ func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
 			return
 		}
 
-		msg := tgbotapi.NewMessage(chatID, "Пожалуйста, введите число:")
+		// Если введено не число, просим повторить ввод (в reply на предыдущее сообщение)
+		replyMsg := tgbotapi.NewMessage(chatID, "Пожалуйста, введите число:")
+		replyMsg.ReplyToMessageID = input.messageID
+		h.bot.Send(replyMsg)
+		return
+	}
+
+	// Если нет ожидаемого ввода, обрабатываем только команды/кнопки
+	notificationsEnabled, err := h.service.GetNotificationsStatus(ctx, userID)
+	if err != nil {
+		log.Printf("Ошибка получения статуса уведомлений: %v", err)
+		notificationsEnabled = true
+	}
+
+	// Обработка команды /reset
+	if update.Message.Text == "🔄 Сброс" {
+		if err := h.service.ResetMaxReps(ctx, userID); err != nil {
+			log.Printf("Ошибка сброса max_reps: %v", err)
+			msg := tgbotapi.NewMessage(chatID, "Произошла ошибка при сбросе. Попробуйте позже.")
+			h.bot.Send(msg)
+			return
+		}
+
+		msg := tgbotapi.NewMessage(chatID, "✅ Дневная норма сброшена до значения по умолчанию (40)")
+		msg.ReplyMarkup = ui.MainKeyboard(notificationsEnabled)
 		h.bot.Send(msg)
 		return
 	}
 
+	// Обработка команд и кнопок
 	switch update.Message.Text {
 	case "/start":
-		h.handleStart(ctx, userID, chatID, notificationsEnabled)
+		h.handleStart(ctx, chatID, userID, notificationsEnabled)
 	case "Добавить отжимания":
 		h.requestPushupCount(chatID, inputTypeDaily)
 	case "🎯 Определить норму":
@@ -118,31 +133,42 @@ func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
 		h.handleToggleNotifications(ctx, userID, chatID, false)
 	case "🔔 Включить напоминания":
 		h.handleToggleNotifications(ctx, userID, chatID, true)
-	 case "🛠️ Настройки":
-        // Показываем клавиатуру настроек
-        notificationsEnabled, _ := h.service.GetNotificationsStatus(ctx, userID)
-        msg := tgbotapi.NewMessage(chatID, "Выберите действие:")
-        msg.ReplyMarkup = ui.SettingsKeyboard(notificationsEnabled)
-        h.bot.Send(msg)
-        
-    case "⬅️ Назад":
-        // Возвращаемся к основной клавиатуре
-        notificationsEnabled, _ := h.service.GetNotificationsStatus(ctx, userID)
-        msg := tgbotapi.NewMessage(chatID, "Главное меню:")
-        msg.ReplyMarkup = ui.MainKeyboard(notificationsEnabled)
-        h.bot.Send(msg)	
-	default:
-		msg := tgbotapi.NewMessage(chatID, "Неизвестная команда. Используйте меню.")
+	case "🛠️ Настройки":
+		msg := tgbotapi.NewMessage(chatID, "Выберите действие:")
+		msg.ReplyMarkup = ui.SettingsKeyboard(notificationsEnabled)
+		h.bot.Send(msg)
+	case "⬅️ Назад":
+		msg := tgbotapi.NewMessage(chatID, "Главное меню:")
 		msg.ReplyMarkup = ui.MainKeyboard(notificationsEnabled)
 		h.bot.Send(msg)
+	default:
+		// Игнорируем обычные текстовые сообщения, которые не являются командами
+		if strings.HasPrefix(update.Message.Text, "/") {
+			msg := tgbotapi.NewMessage(chatID, "Неизвестная команда. Используйте меню.")
+			msg.ReplyMarkup = ui.MainKeyboard(notificationsEnabled)
+			h.bot.Send(msg)
+		}
+		// Для обычных текстовых сообщений без префикса "/" ничего не делаем
 	}
 }
 
+
 func (h *BotHandler) handleAddPushups(ctx context.Context, userID int64, username string, chatID int64, count int, inputType inputType, notEnable bool) {
 	if count <= 0 {
-		h.setPendingInput(chatID, inputType, time.Now().Add(inputTimeout))
-		msg := tgbotapi.NewMessage(chatID, "Пожалуйста, введите положительное число:")
-		h.bot.Send(msg)
+		// Получаем текущий input для получения messageID
+		if input, ok := h.getPendingInput(chatID); ok {
+			msg := tgbotapi.NewMessage(chatID, "Пожалуйста, введите положительное число:")
+			// Используем ForceReply для продолжения режима Reply
+			msg.ReplyMarkup = tgbotapi.ForceReply{ForceReply: true, Selective: true}
+			msg.ReplyToMessageID = input.messageID
+			sentMsg, err := h.bot.Send(msg)
+			if err != nil {
+				log.Printf("Ошибка отправки сообщения: %v", err)
+				return
+			}
+			// Обновляем messageID для продолжения цепочки reply
+			h.setPendingInput(chatID, input.inputType, time.Now().Add(inputTimeout), sentMsg.MessageID)
+		}
 		return
 	}
 
@@ -162,14 +188,13 @@ func (h *BotHandler) handleAddPushups(ctx context.Context, userID int64, usernam
 		response = fmt.Sprintf("🔔Твоя дневная норма установлена: %d\n", result.DailyNorm)
 	}
 
-	response += fmt.Sprintf("✅Добавлено: %d отжиманий!\n📈Товой прогресс: %d/%d\n", count, result.TotalToday, result.DailyNorm)
+	response += fmt.Sprintf("✅Добавлено: %d отжиманий!\n📈Твой прогресс: %d/%d\n", count, result.TotalToday, result.DailyNorm)
 
 	// Проверяем выполнение нормы через кеш
 	hasCompleted, firstCompleter := h.service.CheckNormCompletion(result.DailyNorm)
 
 	var responseFirstCompleter string
 	
-	// Мотивационное сообщение
 	if !hasCompleted {
 		responseFirstCompleter = "❌ Никто еще не выполнил норму сегодня.\nМожет, ты будешь первым? 💪\n\n"
 	} else {
@@ -322,8 +347,6 @@ func (h *BotHandler) handleTodayLeaderboard(ctx context.Context, chatID int64) {
 }
 
 func (h *BotHandler) requestPushupCount(chatID int64, inputType inputType) {
-	h.setPendingInput(chatID, inputType, time.Now().Add(inputTimeout))
-
 	var messageText string
 	if inputType == inputTypeDaily {
 		messageText = "Введите количество отжиманий:"
@@ -331,16 +354,32 @@ func (h *BotHandler) requestPushupCount(chatID int64, inputType inputType) {
 		messageText = "Введите максимальное количество отжиманий за один подход:"
 	}
 
+	// Сначала отправляем сообщение
 	msg := tgbotapi.NewMessage(chatID, messageText)
-	msg.ReplyMarkup = tgbotapi.NewRemoveKeyboard(true)
-	h.bot.Send(msg)
+	msg.ReplyMarkup = tgbotapi.ForceReply{ForceReply: true, Selective: true}
+	sentMsg, err := h.bot.Send(msg)
+	if err != nil {
+		log.Printf("Ошибка отправки сообщения: %v", err)
+		return
+	}
+
+	// Сохраняем ID отправленного сообщения для reply
+	h.setPendingInput(chatID, inputType, time.Now().Add(inputTimeout), sentMsg.MessageID)
 }
 
 // Добавим новую функцию для обработки установки дневной нормы
 func (h *BotHandler) handleSetCustomNorm(ctx context.Context, userID int64, chatID int64, dailyNorm int, notEnable bool) {
 	if dailyNorm <= 0 {
-		h.setPendingInput(chatID, inputTypeCustomNorm, time.Now().Add(inputTimeout))
+		
 		msg := tgbotapi.NewMessage(chatID, "Пожалуйста, введите положительное число:")
+		msg.ReplyMarkup = tgbotapi.ForceReply{ForceReply: true, Selective: true}
+		sentMsg, err := h.bot.Send(msg)
+	
+		if err != nil {
+		log.Printf("Ошибка отправки сообщения: %v", err)
+		return
+	}
+		h.setPendingInput(chatID, inputTypeCustomNorm, time.Now().Add(inputTimeout), sentMsg.MessageID)
 		h.bot.Send(msg)
 		return
 	}
@@ -356,18 +395,25 @@ func (h *BotHandler) handleSetCustomNorm(ctx context.Context, userID int64, chat
 	h.bot.Send(msg)
 }
 
-// Запрос на ввод дневной нормы
 func (h *BotHandler) requestCustomNorm(chatID int64) {
-	h.setPendingInput(chatID, inputTypeCustomNorm, time.Now().Add(inputTimeout))
+	// Сначала отправляем сообщение
 	msg := tgbotapi.NewMessage(chatID, "Введите дневную норму отжиманий:")
-	msg.ReplyMarkup = tgbotapi.NewRemoveKeyboard(true)
-	h.bot.Send(msg)
+	msg.ReplyMarkup = tgbotapi.ForceReply{ForceReply: true, Selective: true}
+	sentMsg, err := h.bot.Send(msg)
+	if err != nil {
+		log.Printf("Ошибка отправки сообщения: %v", err)
+		return
+	}
+
+	// Сохраняем ID отправленного сообщения для reply
+	h.setPendingInput(chatID, inputTypeCustomNorm, time.Now().Add(inputTimeout), sentMsg.MessageID)
 }
 
-func (h *BotHandler) setPendingInput(chatID int64, inputType inputType, expiry time.Time) {
+func (h *BotHandler) setPendingInput(chatID int64, inputType inputType, expiry time.Time, messageID int) {
 	h.pendingInputs.Store(chatID, pendingInput{
 		expiry:    expiry,
 		inputType: inputType,
+		messageID: messageID,
 	})
 }
 
@@ -383,7 +429,7 @@ func (h *BotHandler) clearPendingInput(chatID int64) {
 	h.pendingInputs.Delete(chatID)
 }
 
-func (h *BotHandler) CleanupExpiredInputs(update tgbotapi.Update) {
+func (h *BotHandler) CleanupExpiredInputs() {
 	
 	for {
 		time.Sleep(1 * time.Second)
@@ -399,7 +445,7 @@ func (h *BotHandler) CleanupExpiredInputs(update tgbotapi.Update) {
 				msg := tgbotapi.NewMessage(chatID, "⌛ Ввод отменен по таймауту (10 секунд).")
 
 				ctx := context.Background()
-				userID := update.Message.From.ID
+				userID := chatID
 				notificationsEnabled, err := h.service.GetNotificationsStatus(ctx, userID)
 				if err != nil {
 					log.Printf("Ошибка получения статуса уведомленийctx: %v", err)

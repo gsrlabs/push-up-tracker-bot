@@ -84,7 +84,7 @@ func main() {
 	dbPool.Config().MaxConnIdleTime = 30 * time.Minute
 	
 	// 7. Инициализация слоев приложения (архитектура Clean Architecture)
-
+	
 	// Репозиторий для работы с данными отжиманий
 	pushupRepo := repository.NewPushupRepository(dbPool)
 
@@ -114,6 +114,8 @@ func main() {
 	// Получение канала обновлений
 	updates := telegramBot.GetUpdatesChan(u)
 
+	go botHandler.CleanupExpiredInputs()
+
 	reminderService := service.NewReminderService(pushupService, telegramBot)
 	reminderService.StartReminderChecker()
 
@@ -133,13 +135,10 @@ func main() {
 
 			// Обработка обновления
 			botHandler.HandleUpdate(update)
-			botHandler.CleanupExpiredInputs(update)
-
+			
 		}(update)
 
 	}
-
-	
 
 	// Ожидание завершения всех обработчиков
 	wg.Wait()

@@ -52,11 +52,11 @@ func SettingsKeyboard(notificationsEnabled bool) tgbotapi.ReplyKeyboardMarkup {
 // 	)
 // }
 
-func StartKeyboard() tgbotapi.ReplyKeyboardMarkup{
-return tgbotapi.NewReplyKeyboard(
-		// Первый ряд кнопок
-		tgbotapi.NewKeyboardButtonRow(
-			tgbotapi.NewKeyboardButton("/start"),
-		),
-	)
-}
+// func StartKeyboard() tgbotapi.ReplyKeyboardMarkup{
+// return tgbotapi.NewReplyKeyboard(
+// 		// Первый ряд кнопок
+// 		tgbotapi.NewKeyboardButtonRow(
+// 			tgbotapi.NewKeyboardButton("/start"),
+// 		),
+// 	)
+// }
