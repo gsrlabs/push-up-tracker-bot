@@ -31,13 +31,12 @@ func SettingsKeyboard(notificationsEnabled bool) tgbotapi.ReplyKeyboardMarkup {
 		),
 		// Второй ряд - дополнительные функции
 		tgbotapi.NewKeyboardButtonRow(
-			tgbotapi.NewKeyboardButton("🔄 Сброс"),
+			notificationButton,
 			tgbotapi.NewKeyboardButton("📊 Статистика"),
 		),
 		// Третий ряд - управление уведомлениями
 		tgbotapi.NewKeyboardButtonRow(
 			tgbotapi.NewKeyboardButton("⬅️ Назад"),
-			notificationButton,
 		),
 	)
 }

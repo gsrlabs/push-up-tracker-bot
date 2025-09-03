@@ -101,7 +101,11 @@ func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
 		h.clearPendingInput(chatID)
 		// Если пришло не число — просим повторить и сохраняем цепочку reply
 		replyMsg := tgbotapi.NewMessage(chatID, "Пожалуйста, введите число:")
-		replyMsg.ReplyMarkup = tgbotapi.ForceReply{ForceReply: true, Selective: true}
+		replyMsg.ReplyMarkup = tgbotapi.ForceReply{
+			ForceReply:            true,
+			InputFieldPlaceholder: "Введите число",
+			Selective:             true,
+		}
 		// reply к исходному сообщению запроса (мы сохранили его id в pendingInput)
 
 		msg, err := h.bot.Send(replyMsg)
@@ -121,7 +125,7 @@ func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
 	}
 
 	// /reset через кнопку
-	if text == "🔄 Сброс" {
+	if text == "/reset" {
 		if err := h.service.ResetMaxReps(ctx, userID); err != nil {
 			log.Printf("Ошибка сброса max_reps: %v", err)
 			h.bot.Send(tgbotapi.NewMessage(chatID, "Произошла ошибка при сбросе. Попробуйте позже."))
@@ -172,7 +176,11 @@ func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
 func (h *BotHandler) handleAddPushups(ctx context.Context, userID int64, username string, chatID int64, count int, notEnable bool) {
 	if count <= 0 {
 		msg := tgbotapi.NewMessage(chatID, "Пожалуйста, введите положительное число:")
-		msg.ReplyMarkup = tgbotapi.ForceReply{ForceReply: true, Selective: true}
+		msg.ReplyMarkup = tgbotapi.ForceReply{
+			ForceReply:            true,
+			InputFieldPlaceholder: "Введите число",
+			Selective:             true,
+		}
 		sentMsg, err := h.bot.Send(msg)
 
 		if err != nil {
@@ -217,7 +225,11 @@ func (h *BotHandler) handleAddPushups(ctx context.Context, userID int64, usernam
 func (h *BotHandler) handleSetMaxReps(ctx context.Context, userID int64, username string, chatID int64, count int, notEnable bool) {
 	if count <= 0 {
 		msg := tgbotapi.NewMessage(chatID, "Пожалуйста, введите положительное число:")
-		msg.ReplyMarkup = tgbotapi.ForceReply{ForceReply: true, Selective: true}
+		msg.ReplyMarkup = tgbotapi.ForceReply{
+			ForceReply:            true,
+			InputFieldPlaceholder: "Введите число",
+			Selective:             true,
+		}
 		sentMsg, err := h.bot.Send(msg)
 
 		if err != nil {
@@ -252,7 +264,11 @@ func (h *BotHandler) requestPushupCount(chatID int64, inputType inputType) {
 
 	// Отправляем ForceReply
 	msg := tgbotapi.NewMessage(chatID, "Введите количество отжиманий:")
-	msg.ReplyMarkup = tgbotapi.ForceReply{ForceReply: true, Selective: true}
+	msg.ReplyMarkup = tgbotapi.ForceReply{
+		ForceReply:            true,
+		InputFieldPlaceholder: "Введите число",
+		Selective:             true,
+	}
 	sentMsg, err := h.bot.Send(msg)
 	if err != nil {
 		log.Printf("Ошибка отправки сообщения: %v", err)
@@ -264,7 +280,11 @@ func (h *BotHandler) requestPushupCount(chatID int64, inputType inputType) {
 
 func (h *BotHandler) requestMaxReps(chatID int64) {
 	msg := tgbotapi.NewMessage(chatID, "Введите максимальное количество отжиманий за один подход:")
-	msg.ReplyMarkup = tgbotapi.ForceReply{ForceReply: true, Selective: true}
+	msg.ReplyMarkup = tgbotapi.ForceReply{
+		ForceReply:            true,
+		InputFieldPlaceholder: "Введите число",
+		Selective:             true,
+	}
 	sentMsg, err := h.bot.Send(msg)
 	if err != nil {
 		log.Printf("Ошибка отправки сообщения: %v", err)
@@ -278,7 +298,11 @@ func (h *BotHandler) requestCustomNorm(chatID int64) {
 	// Сначала отправляем сообщение
 	msg := tgbotapi.NewMessage(chatID, "Введите дневную норму отжиманий:")
 
-	msg.ReplyMarkup = tgbotapi.ForceReply{ForceReply: true, Selective: true}
+	msg.ReplyMarkup = tgbotapi.ForceReply{
+		ForceReply:            true,
+		InputFieldPlaceholder: "Введите число",
+		Selective:             true,
+	}
 	sentMsg, err := h.bot.Send(msg)
 	if err != nil {
 		log.Printf("Ошибка отправки сообщения: %v", err)
@@ -428,7 +452,11 @@ func (h *BotHandler) handleSetCustomNorm(ctx context.Context, userID int64, chat
 	if dailyNorm <= 0 {
 
 		msg := tgbotapi.NewMessage(chatID, "Пожалуйста, введите положительное число:")
-		msg.ReplyMarkup = tgbotapi.ForceReply{ForceReply: true, Selective: false}
+		msg.ReplyMarkup = tgbotapi.ForceReply{
+		ForceReply:            true,
+		InputFieldPlaceholder: "Введите число",
+		Selective:             true,
+	}
 		sentMsg, err := h.bot.Send(msg)
 
 		if err != nil {

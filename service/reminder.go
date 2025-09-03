@@ -28,7 +28,7 @@ func (rs *ReminderService) StartReminderChecker() {
 
 func (rs *ReminderService) checkReminders() {
 	// Проверяем каждые 10 секунд для тестирования
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(48 * time.Hour)
 	defer ticker.Stop()
 
 	for range ticker.C {
@@ -122,12 +122,12 @@ func (rs *ReminderService) sendReminder(ctx context.Context, userID int64) {
 	if lastWorkout.IsZero() {
 		message += "Ты ещё не начал тренироваться сегодня! 💥\n"
 	} else {
-		minutesSince := int(time.Since(lastWorkout).Minutes())
-		message += fmt.Sprintf("Прошло уже %d минут с твоей последней тренировки.\n", minutesSince)
+		HoursSince := int(time.Since(lastWorkout).Hours())
+		message += fmt.Sprintf("Прошло уже %d часов с твоей последней тренировки.\n", HoursSince)
 	}
 
 	message += fmt.Sprintf("Тебе осталось выполнить %d отжиманий до дневной нормы (%d всего). 💪🚀", remaining, dailyNorm)
-	message += "\n\nИспользуй кнопку \"Добавить отжимания\" чтобы добавить отжимания!"
+	message += "\n\nИспользуй кнопку \"Добавить отжимания\""
 
 	// Отправляем
 	msg := tgbotapi.NewMessage(userID, message)
