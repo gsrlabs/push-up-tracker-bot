@@ -17,7 +17,7 @@ import (
 type inputType int
 
 const (
-	inputTypeDaily inputType = iota
+	perDayLimit inputType = iota
 	inputTypeMaxReps
 	inputTypeCustomNorm
 )
@@ -95,7 +95,7 @@ func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
 			}
 
 			switch input.inputType {
-			case inputTypeDaily:
+			case perDayLimit:
 				h.handleAddPushups(ctx, userID, username, chatID, count, notificationsEnabled)
 			case inputTypeMaxReps:
 				h.handleSetMaxReps(ctx, userID, username, chatID, count, notificationsEnabled)
@@ -162,7 +162,7 @@ func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
 	case "/start":
 		h.handleStart(ctx, chatID, userID, username, notificationsEnabled)
 	case "➕ Добавить отжимания":
-		h.requestPushupCount(chatID, inputTypeDaily)
+		h.requestPushupCount(chatID, perDayLimit)
 	case "🎯 Определить норму":
 		h.requestMaxReps(chatID)
 	case "📝 Установить норму":
@@ -209,7 +209,7 @@ func (h *BotHandler) handleAddPushups(ctx context.Context, userID int64, usernam
 			return
 		}
 
-		h.sendCancelButton(chatID, inputTypeDaily, sentMsg.MessageID)
+		h.sendCancelButton(chatID, perDayLimit, sentMsg.MessageID)
 		return
 	}
 

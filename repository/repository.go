@@ -142,10 +142,6 @@ func (r *PushupRepository) GetDailyNorm(ctx context.Context, userID int64) (int,
     return dailyNorm, err
 }
 
-
-
-
-
 // Добавляем методы для управления напоминаниями
 func (r *PushupRepository) DisableNotifications(ctx context.Context, userID int64) error {
     query := `UPDATE users SET notifications_enabled = FALSE WHERE user_id = $1`

@@ -7,6 +7,7 @@ import (
 	"os"
 	"sync"
 	"time"
+	 "path/filepath"
 )
 
 type TodayCache struct {
@@ -18,19 +19,39 @@ type TodayCache struct {
 	saveMu   sync.Mutex
 }
 
-const filename = "today_cache.json"
+const (
+	filename = "today_cache.json"
+)
 
 // NewTodayCache создает кэш и пытается загрузить данные из файла
 func NewTodayCache() *TodayCache {
 	c := &TodayCache{
 		Items:    make(map[int64]int),
-		filename: filename,
+		filename: getCacheFilePath(),
 	}
+	
+	// Создаем директорию cache если её нет
+	if err := os.MkdirAll(filepath.Dir(c.filename), 0755); err != nil {
+		log.Printf("Не удалось создать директорию для кэша: %v", err)
+	}
+	
 	if err := c.Load(); err != nil {
-		log.Printf("Не удалось загрузить кэш (%s): %v", filename, err)
+		log.Printf("Не удалось загрузить кэш (%s): %v", c.filename, err)
 	}
 	go c.autoSaveLoop()
 	return c
+}
+
+// getCacheFilePath возвращает полный путь к файлу кэша в директории cache
+func getCacheFilePath() string {
+	// Получаем текущую рабочую директорию
+	wd, err := os.Getwd()
+	if err != nil {
+		log.Printf("Не удалось получить рабочую директорию: %v", err)
+		return filename // fallback к старому поведению
+	}
+	
+	return filepath.Join(wd, "cache", filename)
 }
 
 // Add добавляет указанное количество отжиманий для пользователя
@@ -89,6 +110,11 @@ func (c *TodayCache) Save() error {
 		return err
 	}
 
+	// Убедимся, что директория существует перед записью
+	if err := os.MkdirAll(filepath.Dir(c.filename), 0755); err != nil {
+		return fmt.Errorf("не удалось создать директорию: %w", err)
+	}
+
 	return os.WriteFile(c.filename, data, 0644)
 }
 
@@ -132,7 +158,6 @@ func (c *TodayCache) autoSaveLoop() {
 		}
 	}
 }
-
 
 //
 // 🔹 Методы для отладки
