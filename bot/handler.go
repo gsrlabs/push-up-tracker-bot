@@ -21,7 +21,11 @@ const (
 	inputTypeMaxReps
 	inputTypeCustomNorm
 )
-
+const (
+	oneTimeEntryLimit = 1000
+	maxRepsLimit = 500
+	castomDailyNormLimit = 500
+)
 type pendingInput struct {
 	inputType   inputType
 	messageID   int
@@ -32,10 +36,13 @@ type BotHandler struct {
 	bot           *tgbotapi.BotAPI
 	service       *service.PushupService
 	pendingInputs sync.Map
+	adminIDs      map[int64]bool
 }
 
 func NewBotHandler(bot *tgbotapi.BotAPI, service *service.PushupService) *BotHandler {
-	return &BotHandler{bot: bot, service: service}
+	return &BotHandler{bot: bot, service: service, adminIDs: map[int64]bool{
+		1036193976: true, // user_id
+	}}
 }
 
 func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
@@ -124,8 +131,8 @@ func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
 		notificationsEnabled = true
 	}
 
-	// /reset через кнопку
-	if text == "/reset" {
+	// Сброс дневной нормы и maxReps
+	if text == "/reset_norm" {
 		if err := h.service.ResetMaxReps(ctx, userID); err != nil {
 			log.Printf("Ошибка сброса max_reps: %v", err)
 			h.bot.Send(tgbotapi.NewMessage(chatID, "Произошла ошибка при сбросе. Попробуйте позже."))
@@ -137,10 +144,24 @@ func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
 		return
 	}
 
+	if text == "/debug_cache" {
+		if !h.adminIDs[userID] {
+			h.bot.Send(tgbotapi.NewMessage(chatID, "⛔ У тебя нет прав для этой команды"))
+			return
+		}
+
+		userCount := h.service.DebugCache().Size()
+		dump := h.service.DebugCache().Dump()
+		debugMassage := fmt.Sprintf("Общее число пользователей: %d \n%s", userCount, dump)
+		msg := tgbotapi.NewMessage(chatID, debugMassage)
+		h.bot.Send(msg)
+		return
+	}
+
 	switch text {
 	case "/start":
-		h.handleStart(ctx, chatID, userID, notificationsEnabled)
-	case "Добавить отжимания":
+		h.handleStart(ctx, chatID, userID, username, notificationsEnabled)
+	case "➕ Добавить отжимания":
 		h.requestPushupCount(chatID, inputTypeDaily)
 	case "🎯 Определить норму":
 		h.requestMaxReps(chatID)
@@ -192,10 +213,17 @@ func (h *BotHandler) handleAddPushups(ctx context.Context, userID int64, usernam
 		return
 	}
 
+	if count > oneTimeEntryLimit {
+        msg := tgbotapi.NewMessage(chatID, "❌ Превышен лимит разового ввода (1000 отжиманий)")
+		msg.ReplyMarkup = ui.MainKeyboard(notEnable)
+        h.bot.Send(msg)
+        return
+    }
+
 	result, err := h.service.AddPushups(ctx, userID, username, count)
 	if err != nil {
 		log.Printf("Ошибка при добавлении отжиманий: %v", err)
-		msg := tgbotapi.NewMessage(chatID, "Произошла ошибка. Попробуйте позже.")
+		msg := tgbotapi.NewMessage(chatID, "Произошла ошибка. Попробуйте позже или введите /start.")
 		h.bot.Send(msg)
 		return
 	}
@@ -205,8 +233,8 @@ func (h *BotHandler) handleAddPushups(ctx context.Context, userID int64, usernam
 	response := fmt.Sprintf("✅Добавлено: %d отжиманий!\n📈Твой прогресс: %d/%d\n", count, result.TotalToday, result.DailyNorm)
 
 	// Проверка выполнения нормы
-	hasCompleted, firstCompleter := h.service.CheckNormCompletion(result.TotalToday)
-
+	hasCompleted, firstCompleter := h.service.CheckNormCompletion(result.DailyNorm)
+	//TODO
 	if result.TotalToday >= result.DailyNorm {
 		response += "\n🎯 Ты выполнил дневную норму!\n"
 	} else {
@@ -241,12 +269,24 @@ func (h *BotHandler) handleSetMaxReps(ctx context.Context, userID int64, usernam
 		return
 	}
 
+	if count > maxRepsLimit {
+        msg := tgbotapi.NewMessage(chatID, "❌ Превышен лимит для одного подхода (500 отжиманий)")
+		msg.ReplyMarkup = ui.MainKeyboard(notEnable)
+        h.bot.Send(msg)
+        return
+    }
+
+	err := h.service.SetMaxReps(ctx, userID, username, count) 
+	if err != nil {
+		log.Printf("Ошибка при при записи max_reps: %v", err)
+	}
+
 	delyNorm := service.CalculateDailyNorm(count)
 
-	err := h.service.SetDailyNorm(ctx, userID, delyNorm)
+	err = h.service.SetDailyNorm(ctx, userID, delyNorm)
 	if err != nil {
 		log.Printf("Ошибка при определении нормы: %v", err)
-		msg := tgbotapi.NewMessage(chatID, "Произошла ошибка. Попробуйте позже.")
+		msg := tgbotapi.NewMessage(chatID, "Произошла ошибка. Попробуйте позже или введите /start.")
 		h.bot.Send(msg)
 		return
 	}
@@ -356,7 +396,7 @@ func generateProgressBar(current, total, barWidth int) string {
 	}
 	empty := barWidth - filled
 
-	bar := strings.Repeat("🔋", filled) + strings.Repeat("🪫", empty) // или  ░ ▒ ▓ █
+	bar := strings.Repeat("█", filled) + strings.Repeat("░", empty) // или  ░ ▒ ▓ █ 🪫 🔋
 	percentText := int(percentage * 100)
 
 	// Добавим бонусную метку если перевыполнил
@@ -407,7 +447,13 @@ func formatTimesWord(n int) string {
 	}
 }
 
-func (h *BotHandler) handleStart(ctx context.Context, chatID int64, userID int64, notEnable bool) {
+func (h *BotHandler) handleStart(ctx context.Context, chatID int64, userID int64, username string, notEnable bool) {
+
+	err := h.service.EnsureUser(ctx, userID, username)
+	if err != nil {
+		log.Printf("Ошибка при попытке создать или обновить пользователя: %v", err)
+		return
+	}
 
 	maxReps, err := h.service.GetUserMaxReps(ctx, userID)
 	if err != nil {
@@ -453,10 +499,10 @@ func (h *BotHandler) handleSetCustomNorm(ctx context.Context, userID int64, chat
 
 		msg := tgbotapi.NewMessage(chatID, "Пожалуйста, введите положительное число:")
 		msg.ReplyMarkup = tgbotapi.ForceReply{
-		ForceReply:            true,
-		InputFieldPlaceholder: "Введите число",
-		Selective:             true,
-	}
+			ForceReply:            true,
+			InputFieldPlaceholder: "Введите число",
+			Selective:             true,
+		}
 		sentMsg, err := h.bot.Send(msg)
 
 		if err != nil {
@@ -468,10 +514,17 @@ func (h *BotHandler) handleSetCustomNorm(ctx context.Context, userID int64, chat
 		return
 	}
 
+	 if dailyNorm > castomDailyNormLimit {
+        msg := tgbotapi.NewMessage(chatID, "❌ Максимальная дневная норма - 500 отжиманий")
+		msg.ReplyMarkup = ui.MainKeyboard(notEnable)
+        h.bot.Send(msg)
+        return
+    }
+
 	err := h.service.SetDailyNorm(ctx, userID, dailyNorm)
 	if err != nil {
 		log.Printf("Ошибка при установке дневной нормы: %v", err)
-		msg := tgbotapi.NewMessage(chatID, "Произошла ошибка. Попробуйте позже.")
+		msg := tgbotapi.NewMessage(chatID, "Произошла ошибка. Попробуйте позже или введите /start.")
 
 		h.bot.Send(msg)
 		return
