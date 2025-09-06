@@ -6,7 +6,7 @@ import tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 func MainKeyboard(notificationsEnabled bool) tgbotapi.ReplyKeyboardMarkup {
 	return tgbotapi.NewReplyKeyboard(
 		tgbotapi.NewKeyboardButtonRow(
-			tgbotapi.NewKeyboardButton("Добавить отжимания"),
+			tgbotapi.NewKeyboardButton("➕ Добавить отжимания"),
 		),
 		tgbotapi.NewKeyboardButtonRow(
 			tgbotapi.NewKeyboardButton("🛠️ Настройки"),
@@ -31,32 +31,22 @@ func SettingsKeyboard(notificationsEnabled bool) tgbotapi.ReplyKeyboardMarkup {
 		),
 		// Второй ряд - дополнительные функции
 		tgbotapi.NewKeyboardButtonRow(
-			tgbotapi.NewKeyboardButton("🔄 Сброс"),
+			notificationButton,
 			tgbotapi.NewKeyboardButton("📊 Статистика"),
 		),
 		// Третий ряд - управление уведомлениями
 		tgbotapi.NewKeyboardButtonRow(
 			tgbotapi.NewKeyboardButton("⬅️ Назад"),
-			notificationButton,
 		),
 	)
 }
 
-// // SimpleKeyboard - упрощенная клавиатура (по желанию)
-// func SimpleKeyboard() tgbotapi.ReplyKeyboardMarkup {
-// 	return tgbotapi.NewReplyKeyboard(
-// 		tgbotapi.NewKeyboardButtonRow(
-// 			tgbotapi.NewKeyboardButton("Добавить отжимания"),
-// 			tgbotapi.NewKeyboardButton("🛠️ Настройки"),
-// 		),
-// 	)
-// }
 
-func StartKeyboard() tgbotapi.ReplyKeyboardMarkup{
-return tgbotapi.NewReplyKeyboard(
-		// Первый ряд кнопок
-		tgbotapi.NewKeyboardButtonRow(
-			tgbotapi.NewKeyboardButton("/start"),
+func CancelInlineKeyboard() tgbotapi.InlineKeyboardMarkup {
+	return tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("❌ Отменить", "cancel_input"),
 		),
 	)
 }
+

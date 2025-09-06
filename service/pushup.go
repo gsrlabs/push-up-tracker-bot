@@ -20,72 +20,66 @@ type PushupService struct {
 
 func NewPushupService(repo repository.PushupRepository, cache *cache.TodayCache) *PushupService {
 	return &PushupService{
-		repo:  repo,  // Инициализируйте поле
+		repo:  repo,
 		cache: cache,
 	}
 }
 
-func (s *PushupService) AddPushups(ctx context.Context, userID int64, username string, count int, isMaxReps bool) (*AddPushupsResult, error) {
-	if err := s.repo.EnsureUser(ctx, userID, username); err != nil {
+func (s *PushupService) EnsureUser(ctx context.Context, userID int64, username string) error {
+	return s.repo.EnsureUser(ctx, userID, username)
+}
+
+func (s *PushupService) AddPushups(ctx context.Context, userID int64, username string, count int) (*AddPushupsResult, error) {
+
+	today := time.Now().UTC().Truncate(24 * time.Hour)
+
+	dailyNorm, err := s.repo.GetDailyNorm(ctx, userID)
+	if err != nil {
 		return nil, err
 	}
-	today := time.Now().UTC().Truncate(24 * time.Hour)
-	
-	 var dailyNorm int
-	// Используем разные методы для разных типов добавления
-	if isMaxReps {
-        // Рассчитываем дневную норму и сохраняем
-        dailyNorm = CalculateDailyNorm(count)
-        if err := s.repo.AddMaxPushups(ctx, userID, today, count, dailyNorm); err != nil {
-            return nil, fmt.Errorf("ошибка сохранения в БД: %w", err)
-        }
-    } else {
-        // Для обычных отжиманий получаем текущую норму
-        var err error
-        dailyNorm, err = s.repo.GetDailyNorm(ctx, userID)
-        if err != nil {
-            return nil, err
-        }
-        if err := s.repo.AddPushups(ctx, userID, today, count); err != nil {
-            return nil, fmt.Errorf("ошибка сохранения в БД: %w", err)
-        }
-    }
-	
+
+	if err := s.repo.AddPushups(ctx, userID, today, count); err != nil {
+		return nil, fmt.Errorf("ошибка сохранения в БД: %w", err)
+	}
+
 	totalToday := s.cache.Add(userID, count)
-	
+
 	return &AddPushupsResult{
 		TotalToday: totalToday,
 		DailyNorm:  dailyNorm,
 	}, nil
 }
 
-
 func (s *PushupService) SetDailyNorm(ctx context.Context, userID int64, dailyNorm int) error {
-    return s.repo.SetDailyNorm(ctx, userID, dailyNorm)
+	return s.repo.SetDailyNorm(ctx, userID, dailyNorm)
 }
 
 func (s *PushupService) GetDailyNorm(ctx context.Context, userID int64) (int, error) {
-    return s.repo.GetDailyNorm(ctx, userID)
+	return s.repo.GetDailyNorm(ctx, userID)
 }
 
-// ResetMaxReps сбрасывает max_reps пользователя на значение по умолчанию
+func (s *PushupService) SetMaxReps(ctx context.Context, userID int64, username string, count int) error {
+	return s.repo.SetMaxReps(ctx, userID, count)
+}
+
+
 func (s *PushupService) ResetMaxReps(ctx context.Context, userID int64) error {
-    return s.repo.ResetMaxReps(ctx, userID)
+	return s.repo.ResetMaxReps(ctx, userID)
 }
 
 func (s *PushupService) GetTodayStat(ctx context.Context, userID int64) (int, error) {
 	if cached := s.cache.Get(userID); cached > 0 {
 		return cached, nil
 	}
-	
+
 	today := time.Now().UTC().Truncate(24 * time.Hour)
 	total, err := s.repo.GetTodayStat(ctx, userID, today)
 	if err != nil {
 		return 0, fmt.Errorf("ошибка получения статистики: %w", err)
 	}
-	
+
 	s.cache.Set(userID, total)
-	
+
 	return total, nil
 }
 
@@ -102,7 +96,7 @@ func (s *PushupService) GetTodayLeaderboard(ctx context.Context) ([]repository.L
 	if err != nil {
 		return nil, err
 	}
-	
+
 	for i := range items {
 		items[i].Rank = i + 1
 	}
@@ -114,42 +108,54 @@ func (s *PushupService) GetUserMaxReps(ctx context.Context, userID int64) (int, 
 }
 
 func (s *PushupService) GetFirstWorkoutDate(ctx context.Context, userID int64) (string, error) {
-   date, err := s.repo.GetFirstWorkoutDate(ctx, userID)
-	if err != nil{
+	date, err := s.repo.GetFirstWorkoutDate(ctx, userID)
+	if err != nil {
 		return "", err
 	}
-   return date.Format("02.01.2006"), nil
+	return date.Format("02.01.2006"), nil
 }
 
-// service/pushup.go - добавляем метод
-
-// CheckNormCompletion проверяет выполнение дневной нормы через кеш
+// CheckNormCompletion проверяет, выполнил ли кто-то дневную норму
 func (s *PushupService) CheckNormCompletion(dailyNorm int) (bool, string) {
-	s.cache.Mu.RLock()
-	defer s.cache.Mu.RUnlock()
-	
-	for userID, count := range s.cache.Items {
-		if count >= dailyNorm {
-			// Получаем username пользователя
-			username, err := s.repo.GetUsername(context.Background(), userID)
-			if err != nil {
-				username = fmt.Sprintf("User%d", userID)
-			}
-			return true, username
-		}
-	}
-	return false, ""
+    s.cache.Mu.RLock()
+    defer s.cache.Mu.RUnlock()
+
+    var firstCompleterID int64
+    var maxCount int
+
+    // Ищем пользователя с максимальным количеством отжиманий
+    for userID, count := range s.cache.Items {
+        if count >= dailyNorm && count > maxCount {
+            maxCount = count
+            firstCompleterID = userID
+        }
+    }
+
+    if firstCompleterID != 0 {
+        // Получаем username пользователя
+        username, err := s.repo.GetUsername(context.Background(), firstCompleterID)
+        if err != nil {
+            username = fmt.Sprintf("User%d", firstCompleterID)
+        }
+        return true, username
+    }
+
+    return false, ""
 }
 
 // Добавляем методы для управления напоминаниями в сервисе
 func (s *PushupService) DisableNotifications(ctx context.Context, userID int64) error {
-    return s.repo.DisableNotifications(ctx, userID)
+	return s.repo.DisableNotifications(ctx, userID)
 }
 
 func (s *PushupService) EnableNotifications(ctx context.Context, userID int64) error {
-    return s.repo.EnableNotifications(ctx, userID)
+	return s.repo.EnableNotifications(ctx, userID)
 }
 
 func (s *PushupService) GetNotificationsStatus(ctx context.Context, userID int64) (bool, error) {
-    return s.repo.GetNotificationsStatus(ctx, userID)
+	return s.repo.GetNotificationsStatus(ctx, userID)
+}
+
+func (s *PushupService) DebugCache() *cache.TodayCache {
+	return s.cache
 }
