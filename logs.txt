@@ -1,5 +1,0 @@
-"message":{"message_id":5461,"from":{"id":749931607,"is_bot":false,"first_name":"Myroslav","last_name":"Korman","username":"Namrook","language_code":"uk","is_premium":true},"chat":{"id":749931607,"first_name":"Myroslav","last_name":"Korman","username":"Namrook","type":"private"},"date":1756912570,"text":"/start","entities":[{"offset":0,"length":6,"type":"bot_command"}]}}]}
-2025/09/03 18:16:10 Endpoint: getUpdates, params: map[allowed_updates:null offset:477920262 timeout:60]
-2025/09/03 18:16:10 Ошибка получения статуса уведомлений: no rows in result set
-2025/09/03 18:16:10 Ошибка получения данных: no rows in result set
-

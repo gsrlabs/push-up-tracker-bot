@@ -234,7 +234,7 @@ func (h *BotHandler) handleAddPushups(ctx context.Context, userID int64, usernam
 
 	// Проверка выполнения нормы
 	hasCompleted, firstCompleter := h.service.CheckNormCompletion(result.DailyNorm)
-	//TODO
+	
 	if result.TotalToday >= result.DailyNorm {
 		response += "\n🎯 Ты выполнил дневную норму!\n"
 	} else {
@@ -595,6 +595,7 @@ func (h *BotHandler) handleToggleNotifications(ctx context.Context, userID int64
 		err = h.service.EnableNotifications(ctx, userID)
 		message = "🔔 Напоминания включены! Буду напоминать о тренировках."
 	} else {
+		
 		err = h.service.DisableNotifications(ctx, userID)
 		message = "🔕 Напоминания отключены. Не забывай тренироваться самостоятельно! 💪"
 	}
