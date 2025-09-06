@@ -175,7 +175,7 @@ func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
 		h.handleToggleNotifications(ctx, userID, chatID, false)
 	case "🔔 Включить напоминания":
 		h.handleToggleNotifications(ctx, userID, chatID, true)
-	case "🛠️ Настройки":
+	case "⚙️ Настройки и статистика":
 		msg := tgbotapi.NewMessage(chatID, "Выберите действие:")
 		msg.ReplyMarkup = ui.SettingsKeyboard(notificationsEnabled)
 		h.bot.Send(msg)
@@ -233,7 +233,7 @@ func (h *BotHandler) handleAddPushups(ctx context.Context, userID int64, usernam
 	response := fmt.Sprintf("✅Добавлено: %d отжиманий!\n📈Твой прогресс: %d/%d\n", count, result.TotalToday, result.DailyNorm)
 
 	// Проверка выполнения нормы
-	hasCompleted, firstCompleter := h.service.CheckNormCompletion(result.DailyNorm)
+	hasCompleted, firstCompleter := h.service.CheckNormCompletion(ctx, result.DailyNorm)
 	
 	if result.TotalToday >= result.DailyNorm {
 		response += "\n🎯 Ты выполнил дневную норму!\n"

@@ -116,31 +116,20 @@ func (s *PushupService) GetFirstWorkoutDate(ctx context.Context, userID int64) (
 }
 
 // CheckNormCompletion проверяет, выполнил ли кто-то дневную норму
-func (s *PushupService) CheckNormCompletion(dailyNorm int) (bool, string) {
-    s.cache.Mu.RLock()
-    defer s.cache.Mu.RUnlock()
-
-    var firstCompleterID int64
-    var maxCount int
-
-    // Ищем пользователя с максимальным количеством отжиманий
-    for userID, count := range s.cache.Items {
-        if count >= dailyNorm && count > maxCount {
-            maxCount = count
-            firstCompleterID = userID
-        }
+func (s *PushupService) CheckNormCompletion(ctx context.Context, dailyNorm int) (bool, string) {
+    today := time.Now().UTC().Truncate(24 * time.Hour)
+    userID, err := s.repo.GetFirstNormCompleter(ctx, today)
+    
+    if err != nil || userID == 0 {
+        return false, ""
     }
-
-    if firstCompleterID != 0 {
-        // Получаем username пользователя
-        username, err := s.repo.GetUsername(context.Background(), firstCompleterID)
-        if err != nil {
-            username = fmt.Sprintf("User%d", firstCompleterID)
-        }
-        return true, username
+    
+    username, err := s.repo.GetUsername(ctx, userID)
+    if err != nil {
+        username = fmt.Sprintf("User%d", userID)
     }
-
-    return false, ""
+    
+    return true, username
 }
 
 // Добавляем методы для управления напоминаниями в сервисе

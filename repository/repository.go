@@ -180,3 +180,22 @@ func (r *PushupRepository) GetFirstWorkoutDate(ctx context.Context, userID int64
     
     return firstDate, nil
 }
+
+func (r *PushupRepository) GetFirstNormCompleter(ctx context.Context, date time.Time) (int64, error) {
+    query := `
+        SELECT user_id 
+        FROM pushups 
+        WHERE date = $1 
+        GROUP BY user_id 
+        HAVING SUM(count) >= (SELECT daily_norm FROM users WHERE user_id = pushups.user_id)
+        ORDER BY MIN(record_id) 
+        LIMIT 1
+    `
+    
+    var userID int64
+    err := r.pool.QueryRow(ctx, query, date).Scan(&userID)
+    if err != nil {
+        return 0, err
+    }
+    return userID, nil
+}

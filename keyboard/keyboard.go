@@ -9,7 +9,7 @@ func MainKeyboard(notificationsEnabled bool) tgbotapi.ReplyKeyboardMarkup {
 			tgbotapi.NewKeyboardButton("➕ Добавить отжимания"),
 		),
 		tgbotapi.NewKeyboardButtonRow(
-			tgbotapi.NewKeyboardButton("🛠️ Настройки"),
+			tgbotapi.NewKeyboardButton("⚙️ Настройки и статистика"),
 		),
 	)
 }
