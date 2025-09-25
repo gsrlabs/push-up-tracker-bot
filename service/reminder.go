@@ -122,8 +122,7 @@ func (rs *ReminderService) sendReminder(ctx context.Context, userID int64) {
 	if lastWorkout.IsZero() {
 		message += "Ты ещё не начал тренироваться сегодня! 💥\n"
 	} else {
-		HoursSince := int(time.Since(lastWorkout).Hours())
-		message += fmt.Sprintf("Прошло уже %d часов с твоей последней тренировки.\n", HoursSince)
+		message += fmt.Sprintln("Прошло уже 48 часов с твоей последней тренировки.")
 	}
 
 	message += fmt.Sprintf("Тебе осталось выполнить %d отжиманий до дневной нормы (%d всего). 💪🚀", remaining, dailyNorm)

@@ -417,14 +417,17 @@ func (h *BotHandler) handleTotalStat(ctx context.Context, userID int64, chatID i
 		return
 	}
 
-	statText := fmt.Sprintf("💪За все время ты отжался: %d %s\n", total, formatTimesWord(total))
+	var statText string
 	var FirstWorkoutDateText string
 
 	firstWorkoutDate, err := h.service.GetFirstWorkoutDate(ctx, userID)
-	if err != nil || firstWorkoutDate == "" {
-		FirstWorkoutDateText = "Пользователь еще не начинал тренироваться"
+	if err != nil || firstWorkoutDate == "01.01.0001" {
+		FirstWorkoutDateText = "Ты ещё не начинал тренироваться"
+	} else {
+		statText = fmt.Sprintf("💪За все время ты отжался: %d %s\n", total, formatTimesWord(total))
+		FirstWorkoutDateText = fmt.Sprintf("Первая тренировка: %s", firstWorkoutDate)
 	}
-	FirstWorkoutDateText = fmt.Sprintf("Первая тренировка: %s", firstWorkoutDate)
+	
 
 	msg := tgbotapi.NewMessage(chatID, statText+FirstWorkoutDateText)
 	msg.ReplyMarkup = ui.MainKeyboard(notEnable)
@@ -469,7 +472,6 @@ func (h *BotHandler) handleStart(ctx context.Context, chatID int64, userID int64
 	}
 
 	msg := tgbotapi.NewMessage(chatID, "Выберите действие:")
-
 	msg.ReplyMarkup = ui.MainKeyboard(notEnable)
 	h.bot.Send(msg)
 }
