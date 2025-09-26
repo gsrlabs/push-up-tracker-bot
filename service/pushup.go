@@ -58,8 +58,29 @@ func (s *PushupService) GetDailyNorm(ctx context.Context, userID int64) (int, er
 	return s.repo.GetDailyNorm(ctx, userID)
 }
 
+// SetMaxReps теперь также сохраняет в историю
 func (s *PushupService) SetMaxReps(ctx context.Context, userID int64, username string, count int) error {
-	return s.repo.SetMaxReps(ctx, userID, count)
+	// Сохраняем в основную таблицу пользователей
+	if err := s.repo.SetMaxReps(ctx, userID, count); err != nil {
+		return err
+	}
+
+	// Сохраняем в историю
+	if err := s.repo.AddMaxRepsHistory(ctx, userID, count); err != nil {
+		return fmt.Errorf("ошибка сохранения в историю: %w", err)
+	}
+
+	return nil
+}
+
+// GetMaxRepsHistory возвращает историю максимальных отжиманий
+func (s *PushupService) GetMaxRepsHistory(ctx context.Context, userID int64) ([]repository.MaxRepsHistoryItem, error) {
+	return s.repo.GetMaxRepsHistory(ctx, userID)
+}
+
+// GetMaxRepsHistory возвращает рекорд максимальных отжиманий
+func (s *PushupService) GetMaxRepsRecord(ctx context.Context, userID int64) (repository.MaxRepsHistoryItem, error) {
+	return s.repo.GetMaxRepsRecord(ctx, userID)
 }
 
 
@@ -117,20 +138,21 @@ func (s *PushupService) GetFirstWorkoutDate(ctx context.Context, userID int64) (
 
 // CheckNormCompletion проверяет, выполнил ли кто-то дневную норму
 func (s *PushupService) CheckNormCompletion(ctx context.Context, dailyNorm int) (bool, string) {
-    today := time.Now().UTC().Truncate(24 * time.Hour)
-    userID, err := s.repo.GetFirstNormCompleter(ctx, today)
-    
-    if err != nil || userID == 0 {
-        return false, ""
-    }
-    
-    username, err := s.repo.GetUsername(ctx, userID)
-    if err != nil {
-        username = fmt.Sprintf("User%d", userID)
-    }
-    
-    return true, username
+	today := time.Now().UTC().Truncate(24 * time.Hour)
+	userID, err := s.repo.GetFirstNormCompleter(ctx, today)
+
+	if err != nil || userID == 0 {
+		return false, ""
+	}
+
+	username, err := s.repo.GetUsername(ctx, userID)
+	if err != nil {
+		username = fmt.Sprintf("User%d", userID)
+	}
+
+	return true, username
 }
+
 
 // Добавляем методы для управления напоминаниями в сервисе
 func (s *PushupService) DisableNotifications(ctx context.Context, userID int64) error {

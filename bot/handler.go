@@ -12,6 +12,7 @@ import (
 	"trackerbot/service"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	
 )
 
 type inputType int
@@ -22,10 +23,11 @@ const (
 	inputTypeCustomNorm
 )
 const (
-	oneTimeEntryLimit = 1000
-	maxRepsLimit = 500
+	oneTimeEntryLimit    = 1000
+	maxRepsLimit         = 500
 	castomDailyNormLimit = 500
 )
+
 type pendingInput struct {
 	inputType   inputType
 	messageID   int
@@ -179,6 +181,8 @@ func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
 		msg := tgbotapi.NewMessage(chatID, "Выберите действие:")
 		msg.ReplyMarkup = ui.SettingsKeyboard(notificationsEnabled)
 		h.bot.Send(msg)
+	case "📈 История прогресса":
+    	h.handleProgressHistory(ctx, userID, chatID, notificationsEnabled)
 	case "⬅️ Назад":
 		msg := tgbotapi.NewMessage(chatID, "Главное меню:")
 		msg.ReplyMarkup = ui.MainKeyboard(notificationsEnabled)
@@ -214,11 +218,11 @@ func (h *BotHandler) handleAddPushups(ctx context.Context, userID int64, usernam
 	}
 
 	if count > oneTimeEntryLimit {
-        msg := tgbotapi.NewMessage(chatID, "❌ Превышен лимит разового ввода (1000 отжиманий)")
+		msg := tgbotapi.NewMessage(chatID, "❌ Превышен лимит разового ввода (1000 отжиманий)")
 		msg.ReplyMarkup = ui.MainKeyboard(notEnable)
-        h.bot.Send(msg)
-        return
-    }
+		h.bot.Send(msg)
+		return
+	}
 
 	result, err := h.service.AddPushups(ctx, userID, username, count)
 	if err != nil {
@@ -234,7 +238,7 @@ func (h *BotHandler) handleAddPushups(ctx context.Context, userID int64, usernam
 
 	// Проверка выполнения нормы
 	hasCompleted, firstCompleter := h.service.CheckNormCompletion(ctx, result.DailyNorm)
-	
+
 	if result.TotalToday >= result.DailyNorm {
 		response += "\n🎯 Ты выполнил дневную норму!\n"
 	} else {
@@ -252,52 +256,106 @@ func (h *BotHandler) handleAddPushups(ctx context.Context, userID int64, usernam
 
 func (h *BotHandler) handleSetMaxReps(ctx context.Context, userID int64, username string, chatID int64, count int, notEnable bool) {
 	if count <= 0 {
-		msg := tgbotapi.NewMessage(chatID, "Пожалуйста, введите положительное число:")
-		msg.ReplyMarkup = tgbotapi.ForceReply{
-			ForceReply:            true,
-			InputFieldPlaceholder: "Введите число",
-			Selective:             true,
-		}
-		sentMsg, err := h.bot.Send(msg)
+        msg := tgbotapi.NewMessage(chatID, "Пожалуйста, введите положительное число:")
+        msg.ReplyMarkup = tgbotapi.ForceReply{
+            ForceReply:            true,
+            InputFieldPlaceholder: "Введите число",
+            Selective:             true,
+        }
+        sentMsg, err := h.bot.Send(msg)
 
-		if err != nil {
-			log.Printf("Ошибка отправки сообщения: %v", err)
-			return
-		}
+        if err != nil {
+            log.Printf("Ошибка отправки сообщения: %v", err)
+            return
+        }
 
-		h.sendCancelButton(chatID, inputTypeMaxReps, sentMsg.MessageID)
-		return
-	}
+        h.sendCancelButton(chatID, inputTypeMaxReps, sentMsg.MessageID)
+        return
+    }
 
-	if count > maxRepsLimit {
+    if count > maxRepsLimit {
         msg := tgbotapi.NewMessage(chatID, "❌ Превышен лимит для одного подхода (500 отжиманий)")
-		msg.ReplyMarkup = ui.MainKeyboard(notEnable)
+        msg.ReplyMarkup = ui.MainKeyboard(notEnable)
         h.bot.Send(msg)
         return
     }
 
-	err := h.service.SetMaxReps(ctx, userID, username, count) 
+    // Сохраняем текущее максимальное количество отжиманий
+    err := h.service.SetMaxReps(ctx, userID, username, count) 
+    if err != nil {
+        log.Printf("Ошибка при записи max_reps: %v", err)
+        msg := tgbotapi.NewMessage(chatID, "Произошла ошибка. Попробуйте позже.")
+        msg.ReplyMarkup = ui.MainKeyboard(notEnable)
+        h.bot.Send(msg)
+        return
+    }
+
+    // Рассчитываем и устанавливаем дневную норму
+    dailyNorm := service.CalculateDailyNorm(count)
+    err = h.service.SetDailyNorm(ctx, userID, dailyNorm)
+    if err != nil {
+        log.Printf("Ошибка при определении нормы: %v", err)
+        msg := tgbotapi.NewMessage(chatID, "Произошла ошибка. Попробуйте позже.")
+        msg.ReplyMarkup = ui.MainKeyboard(notEnable)
+        h.bot.Send(msg)
+        return
+    }
+
+    // Получаем историю максимальных отжиманий
+    history, err := h.service.GetMaxRepsHistory(ctx, userID)
+    if err != nil {
+        log.Printf("Ошибка получения истории max_reps: %v", err)
+        // Продолжаем выполнение, даже если история недоступна
+    }
+
+	record, err := h.service.GetMaxRepsRecord(ctx, userID)
 	if err != nil {
-		log.Printf("Ошибка при при записи max_reps: %v", err)
+        log.Printf("Ошибка получения рекорда max_reps: %v", err)
+        // Продолжаем выполнение, даже если история недоступна
+    }
+
+    // Формируем ответ с историей
+    response := fmt.Sprintf("✅ Твое значение отжиманий за подход обновлено: %d\n\n", count)
+	response += fmt.Sprintf("📝 Твой текущий ранг: %s!\n\n", service.GetUserRank(count))
+    response += fmt.Sprintf("🔔 Дневная норма установлена: %d\n\n", dailyNorm)
+
+	if record.MaxReps != 0 {
+		response += fmt.Sprintf("💪 Твой рекорд: %s → %d отжиманий!\n\n", 
+                record.Date.Format("02.01.2006"), 
+                record.MaxReps)
 	}
+	
+    if len(history) > 0 {
+        response += "📈 Твои отжимания:\n"
+        for i, item := range history {
+            if i >= 2 { // Показываем только последние 2 записи
+                break
+            }
+            response += fmt.Sprintf("• %s → %d\n", 
+                item.Date.Format("02.01.2006"), 
+                item.MaxReps)
+        }
+        
+        // Анализ прогресса
+        if len(history) > 1 {
+            latest := history[0].MaxReps
+            previous := history[1].MaxReps
+            if latest > previous {
+                progress := latest - previous
+                response += fmt.Sprintf("\n🎉 Прогресс: +%d отжиманий! 💪", progress)
+            } else if latest == previous {
+                response += "\n📊 Стабильный результат! 🎯"
+            }
+        }
+    } else {
+        response += "\n🎯 Это твой первый рекорд! Начнем отслеживать прогресс!"
+    }
 
-	delyNorm := service.CalculateDailyNorm(count)
+    log.Printf("Username %s UserID %d set max_reps: %d, daily_norm: %d", username, userID, count, dailyNorm)
 
-	err = h.service.SetDailyNorm(ctx, userID, delyNorm)
-	if err != nil {
-		log.Printf("Ошибка при определении нормы: %v", err)
-		msg := tgbotapi.NewMessage(chatID, "Произошла ошибка. Попробуйте позже или введите /start.")
-		h.bot.Send(msg)
-		return
-	}
-
-	response := fmt.Sprintf("🔔Твоя дневная норма установлена: %d\n", delyNorm)
-
-	log.Printf("Username%s UserID %d set %d dely_norm", username, userID, delyNorm)
-
-	msg := tgbotapi.NewMessage(chatID, response)
-	msg.ReplyMarkup = ui.MainKeyboard(notEnable)
-	h.bot.Send(msg)
+    msg := tgbotapi.NewMessage(chatID, response)
+    msg.ReplyMarkup = ui.MainKeyboard(notEnable)
+    h.bot.Send(msg)
 }
 
 func (h *BotHandler) requestPushupCount(chatID int64, inputType inputType) {
@@ -427,7 +485,6 @@ func (h *BotHandler) handleTotalStat(ctx context.Context, userID int64, chatID i
 		statText = fmt.Sprintf("💪За все время ты отжался: %d %s\n", total, formatTimesWord(total))
 		FirstWorkoutDateText = fmt.Sprintf("Первая тренировка: %s", firstWorkoutDate)
 	}
-	
 
 	msg := tgbotapi.NewMessage(chatID, statText+FirstWorkoutDateText)
 	msg.ReplyMarkup = ui.MainKeyboard(notEnable)
@@ -516,12 +573,12 @@ func (h *BotHandler) handleSetCustomNorm(ctx context.Context, userID int64, chat
 		return
 	}
 
-	 if dailyNorm > castomDailyNormLimit {
-        msg := tgbotapi.NewMessage(chatID, "❌ Максимальная дневная норма - 500 отжиманий")
+	if dailyNorm > castomDailyNormLimit {
+		msg := tgbotapi.NewMessage(chatID, "❌ Максимальная дневная норма - 500 отжиманий")
 		msg.ReplyMarkup = ui.MainKeyboard(notEnable)
-        h.bot.Send(msg)
-        return
-    }
+		h.bot.Send(msg)
+		return
+	}
 
 	err := h.service.SetDailyNorm(ctx, userID, dailyNorm)
 	if err != nil {
@@ -597,7 +654,7 @@ func (h *BotHandler) handleToggleNotifications(ctx context.Context, userID int64
 		err = h.service.EnableNotifications(ctx, userID)
 		message = "🔔 Напоминания включены! Буду напоминать о тренировках."
 	} else {
-		
+
 		err = h.service.DisableNotifications(ctx, userID)
 		message = "🔕 Напоминания отключены. Не забывай тренироваться самостоятельно! 💪"
 	}
@@ -613,4 +670,54 @@ func (h *BotHandler) handleToggleNotifications(ctx context.Context, userID int64
 	msg := tgbotapi.NewMessage(chatID, message)
 	msg.ReplyMarkup = ui.MainKeyboard(enable)
 	h.bot.Send(msg)
+}
+
+
+// handleProgressHistory метод для обработки истории прогресса
+func (h *BotHandler) handleProgressHistory(ctx context.Context, userID int64, chatID int64, notEnable bool) {
+    history, err := h.service.GetMaxRepsHistory(ctx, userID)
+    if err != nil {
+        log.Printf("Ошибка получения истории прогресса: %v", err)
+        msg := tgbotapi.NewMessage(chatID, "❌ Ошибка загрузки истории прогресса")
+        msg.ReplyMarkup = ui.MainKeyboard(notEnable)
+        h.bot.Send(msg)
+        return
+    }
+
+    if len(history) == 0 {
+        msg := tgbotapi.NewMessage(chatID, "📊 История прогресса пуста.\nИспользуй \"🎯 Определить норму\" чтобы добавить первый рекорд!")
+        msg.ReplyMarkup = ui.MainKeyboard(notEnable)
+        h.bot.Send(msg)
+        return
+    }
+
+    var response strings.Builder
+    response.WriteString("📈 Твоя история прогресса:\n\n")
+    
+    for i, item := range history {
+        response.WriteString(fmt.Sprintf("%d. %s → %d отжиманий\n", 
+            i+1, 
+            item.Date.Format("02.01.2006"), 
+            item.MaxReps))
+    }
+
+    // Анализ общего прогресса
+    if len(history) > 1 {
+        first := history[len(history)-1].MaxReps
+        last := history[0].MaxReps
+        progress := last - first
+        
+        response.WriteString("\n📊 Общий прогресс: ")
+        if progress > 0 {
+            response.WriteString(fmt.Sprintf("+%d отжиманий! 🚀", progress))
+        } else if progress < 0 {
+            response.WriteString(fmt.Sprintf("%d отжиманий 📉", progress))
+        } else {
+            response.WriteString("стабильно! 🎯")
+        }
+    }
+
+    msg := tgbotapi.NewMessage(chatID, response.String())
+    msg.ReplyMarkup = ui.MainKeyboard(notEnable)
+    h.bot.Send(msg)
 }
