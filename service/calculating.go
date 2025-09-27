@@ -95,34 +95,83 @@ func clamp(value, min, max int) int {
 
 
 // GetUserRank определяет ранг пользователя на основе его maxReps
-func GetUserRank(maxReps int) string {
-    switch {
-    case maxReps <= 0:
-        return "💤 Сонная муха"
-    case maxReps <= 5:
-        return "🌱 Росток силы"
-    case maxReps <= 10:
-        return "🐜 Трудяга"
-    case maxReps <= 15:
-        return "🚀 Стажёр космоса"
-    case maxReps <= 20:
-        return "🚀 Ракета-носитель"
-    case maxReps <= 25:
-        return "⚔️ Рыцарь света"
-    case maxReps <= 30:
-        return "🛡️ Непробиваемый"
-    case maxReps <= 40:
-        return "⚡ Гроза пола"
-    case maxReps <= 50:
-        return "🏹 Адепт упорства"
-    case maxReps <= 75:
-        return "🌌 Победитель гравитации"
-    case maxReps <= 100:
-        return "🌟 Легенда горизонтов"
-    default:
-        return "🚀 ВЛАСТЕЛИН ОТЖИМАНИЙ"
-    }
+// Константы для порогов рангов
+const (
+    RankSleepyFly      = 0
+    RankSprout         = 5 // +5
+    RankWorker         = 10 // +5
+    RankTrainee        = 15 // +5
+    RankRocket         = 20 // +5
+    RankKnight         = 25 // +5
+    RankImpenetrable   = 30 // +5
+    RankThunder        = 40 // +10
+    RankAdept          = 50 // +10
+    RankGravity        = 65 // +15
+    RankLegend         = 80 // +15
+    LordOfPushUps      = 100 // +20
+)
+
+type UserRank struct {
+    threshold int
+    rank string
+} 
+
+// Ранги пользователя в порядке возрастания
+var userRanks = []UserRank{
+    {RankSleepyFly, "💤 Сонная муха"},
+    {RankSprout, "🌱 Росток силы"},
+    {RankWorker, "🐜 Трудяга"},
+    {RankTrainee, "🚀 Стажёр космоса"},
+    {RankRocket, "🚀 Ракета-носитель"},
+    {RankKnight, "⚔️ Рыцарь света"},
+    {RankImpenetrable, "🛡️ Непробиваемый"},
+    {RankThunder, "⚡ Гроза пола"},
+    {RankAdept, "🏹 Адепт упорства"},
+    {RankGravity, "🌌 Победитель гравитации"},
+    {RankLegend, "🏆 Легенда горизонтов"},
+    {LordOfPushUps, "🌟 ВЛАСТЕЛИН ОТЖИМАНИЙ"},
 }
+
+
+
+// GetUserRank определяет ранг пользователя на основе его maxReps
+func GetUserRank(maxReps int) string {
+    for i := len(userRanks) - 1; i >= 0; i-- {
+        if maxReps >= userRanks[i].threshold {
+            return userRanks[i].rank
+        }
+    }
+    return "🌟 ВЛАСТЕЛИН ОТЖИМАНИЙ"
+}
+
+// GetRepsToNextRank возвращает количество отжиманий до следующего ранга
+func GetRepsToNextRank(maxReps int) int {
+    currentRankIndex := -1
+    
+    // Находим индекс текущего ранга
+    for i := len(userRanks) - 1; i >= 0; i-- {
+        if maxReps >= userRanks[i].threshold {
+            currentRankIndex = i
+            break
+        }
+    }
+    
+    // Если текущий ранг - последний или пользователь вышел за пределы
+    if currentRankIndex == len(userRanks)-1 || maxReps > LordOfPushUps {
+        return 0
+    }
+    
+    // Если не нашли ранг (маловероятно, но на всякий случай)
+    if currentRankIndex == -1 {
+        return RankSprout - maxReps
+    }
+    
+    // Следующий ранг
+    nextRank := userRanks[currentRankIndex+1]
+    return nextRank.threshold - maxReps
+}
+
+
 
 // CalculateNextTarget рассчитывает, на сколько минимум нужно увеличить maxReps на новой неделе.
 // Аргумент:

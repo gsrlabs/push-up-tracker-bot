@@ -316,9 +316,15 @@ func (h *BotHandler) handleSetMaxReps(ctx context.Context, userID int64, usernam
 
     // Формируем ответ с историей
     response := fmt.Sprintf("✅ Твое значение отжиманий за подход обновлено: %d\n\n", count)
-	response += fmt.Sprintf("📝 Твой текущий ранг: %s!\n\n", service.GetUserRank(count))
-    response += fmt.Sprintf("🔔 Дневная норма установлена: %d\n\n", dailyNorm)
+	response += fmt.Sprintf("🔔 Дневная норма установлена: %d\n\n", dailyNorm)
+	response += fmt.Sprintf("🎖️ Твой текущий ранг: %s!\n\n", service.GetUserRank(count))
 
+	repsToNextRank := service.GetRepsToNextRank(count)
+	if  repsToNextRank > 0 { 
+		response += fmt.Sprintf("🎯 До следующего ранга тебе осталось: +%d\n\n", repsToNextRank)
+	}
+
+   
 	if record.MaxReps != 0 {
 		response += fmt.Sprintf("💪 Твой рекорд: %s → %d отжиманий!\n\n", 
                 record.Date.Format("02.01.2006"), 
@@ -326,15 +332,12 @@ func (h *BotHandler) handleSetMaxReps(ctx context.Context, userID int64, usernam
 	}
 	
     if len(history) > 0 {
-        response += "📈 Твои отжимания:\n"
-        for i, item := range history {
-            if i >= 2 { // Показываем только последние 2 записи
-                break
-            }
+        response += "📝 Твои предыдущие отжимания:\n"
+     
+            item := history[1]
             response += fmt.Sprintf("• %s → %d\n", 
                 item.Date.Format("02.01.2006"), 
                 item.MaxReps)
-        }
         
         // Анализ прогресса
         if len(history) > 1 {
@@ -351,6 +354,7 @@ func (h *BotHandler) handleSetMaxReps(ctx context.Context, userID int64, usernam
         response += "\n🎯 Это твой первый рекорд! Начнем отслеживать прогресс!"
     }
 
+	
     log.Printf("Username %s UserID %d set max_reps: %d, daily_norm: %d", username, userID, count, dailyNorm)
 
     msg := tgbotapi.NewMessage(chatID, response)
