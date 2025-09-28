@@ -27,7 +27,7 @@ func SettingsKeyboard(notificationsEnabled bool) tgbotapi.ReplyKeyboardMarkup {
         // Первый ряд - основные настройки
         tgbotapi.NewKeyboardButtonRow(
             tgbotapi.NewKeyboardButton("📝 Установить норму"),
-            tgbotapi.NewKeyboardButton("🎯 Определить норму"),
+            tgbotapi.NewKeyboardButton("🎯 Обновить прогресс"),
         ),
         // Второй ряд - дополнительные функции
         tgbotapi.NewKeyboardButtonRow(

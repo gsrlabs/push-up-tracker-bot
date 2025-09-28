@@ -109,10 +109,22 @@ func (r *PushupRepository) GetUsername(ctx context.Context, userID int64) (strin
 	return username, nil
 }
 
+// SetMaxReps теперь обновляет и timestamp
 func (r *PushupRepository) SetMaxReps(ctx context.Context, userID int64, count int) error {
-	query := `UPDATE users SET max_reps = $1 WHERE user_id = $2`
-	_, err := r.pool.Exec(ctx, query, count, userID)
-	return err
+    query := `UPDATE users SET max_reps = $1, last_updated_max_reps = CURRENT_TIMESTAMP WHERE user_id = $2`
+    _, err := r.pool.Exec(ctx, query, count, userID)
+    return err
+}
+
+// GetLastMaxRepsUpdate возвращает дату последнего обновления max_reps
+func (r *PushupRepository) GetLastMaxRepsUpdate(ctx context.Context, userID int64) (time.Time, error) {
+    query := `SELECT last_updated_max_reps FROM users WHERE user_id = $1`
+    var lastUpdate time.Time
+    err := r.pool.QueryRow(ctx, query, userID).Scan(&lastUpdate)
+    if err != nil {
+        return time.Time{}, err
+    }
+    return lastUpdate, nil
 }
 
 func (r *PushupRepository) GetUserMaxReps(ctx context.Context, userID int64) (int, error) {
@@ -258,3 +270,5 @@ func (r *PushupRepository) GetMaxRepsRecord(ctx context.Context, userID int64) (
 
 	return maxRepsRecord, nil
 }
+
+

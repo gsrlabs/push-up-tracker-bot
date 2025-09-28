@@ -165,7 +165,7 @@ func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
 		h.handleStart(ctx, chatID, userID, username, notificationsEnabled)
 	case "➕ Добавить отжимания":
 		h.requestPushupCount(chatID, perDayLimit)
-	case "🎯 Определить норму":
+	case "🎯 Обновить прогресс":
 		h.requestMaxReps(chatID)
 	case "📝 Установить норму":
 		h.requestCustomNorm(chatID)
@@ -250,6 +250,7 @@ func (h *BotHandler) handleAddPushups(ctx context.Context, userID int64, usernam
 	}
 
 	msg := tgbotapi.NewMessage(chatID, response)
+	//msg.ParseMode = "Markdown"
 	msg.ReplyMarkup = ui.MainKeyboard(notEnable)
 	h.bot.Send(msg)
 }
@@ -331,7 +332,7 @@ func (h *BotHandler) handleSetMaxReps(ctx context.Context, userID int64, usernam
                 record.MaxReps)
 	}
 	
-    if len(history) > 0 {
+    if len(history) >= 2 {
         response += "📝 Твои предыдущие отжимания:\n"
      
             item := history[1]
@@ -689,7 +690,7 @@ func (h *BotHandler) handleProgressHistory(ctx context.Context, userID int64, ch
     }
 
     if len(history) == 0 {
-        msg := tgbotapi.NewMessage(chatID, "📊 История прогресса пуста.\nИспользуй \"🎯 Определить норму\" чтобы добавить первый рекорд!")
+        msg := tgbotapi.NewMessage(chatID, "📊 История прогресса пуста.\nИспользуй \"🎯 Обновить прогресс\" что бы начать историю прогресса!")
         msg.ReplyMarkup = ui.MainKeyboard(notEnable)
         h.bot.Send(msg)
         return
