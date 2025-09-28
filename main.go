@@ -100,7 +100,6 @@ func main() {
 	// Обработчик Telegram бота
 	botHandler := bot.NewBotHandler(telegramBot, pushupService)
 
-	//go botHandler.CleanupExpiredInputs()
 	// Запускаем фоновую очистку
 	// 8. Настройка получения обновлений от Telegram
 	// NewUpdate(0) - получаем все обновления с момента запуска
