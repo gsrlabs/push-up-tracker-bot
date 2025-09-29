@@ -84,8 +84,8 @@ func (s *PushupService) GetMaxRepsRecord(ctx context.Context, userID int64) (rep
 }
 
 
-func (s *PushupService) ResetMaxReps(ctx context.Context, userID int64) error {
-	return s.repo.ResetMaxReps(ctx, userID)
+func (s *PushupService) ResetDailyNorm(ctx context.Context, userID int64) error {
+	return s.repo.ResetDailyNorm(ctx, userID)
 }
 
 func (s *PushupService) GetTodayStat(ctx context.Context, userID int64) (int, error) {

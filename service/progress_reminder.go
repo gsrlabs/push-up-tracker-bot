@@ -72,9 +72,9 @@ func (prs *ProgressReminderService) getUsersForProgressReminder(ctx context.Cont
     WHERE notifications_enabled = TRUE
       AND max_reps > 0
       AND max_reps < 100
-      AND last_updated_max_reps <= CURRENT_DATE - INTERVAL '7 days'
+      AND last_updated_max_reps <= CURRENT_DATE - INTERVAL '1 days' // TODO 7 days
     ORDER BY last_updated_max_reps ASC`
-
+   
     rows, err := prs.pushupService.repo.Pool().Query(ctx, query)
     if err != nil {
         return nil, err

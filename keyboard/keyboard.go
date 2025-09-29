@@ -26,18 +26,21 @@ func SettingsKeyboard(notificationsEnabled bool) tgbotapi.ReplyKeyboardMarkup {
 	return tgbotapi.NewReplyKeyboard(
         // Первый ряд - основные настройки
         tgbotapi.NewKeyboardButtonRow(
-            tgbotapi.NewKeyboardButton("📝 Установить норму"),
-            tgbotapi.NewKeyboardButton("🎯 Обновить прогресс"),
+            tgbotapi.NewKeyboardButton("🎯 Тест максимальных отжиманий"),
         ),
-        // Второй ряд - дополнительные функции
+		 // Второй ряд - основные настройки
         tgbotapi.NewKeyboardButtonRow(
-            tgbotapi.NewKeyboardButton("📈 История прогресса"),
-            tgbotapi.NewKeyboardButton("📊 Статистика"),
+            tgbotapi.NewKeyboardButton("📝 Установить норму"),
+			tgbotapi.NewKeyboardButton("📊 Статистика"),
         ),
-        // Третий ряд - управление уведомлениями
+        // Третий ряд - дополнительные функции
+        tgbotapi.NewKeyboardButtonRow(
+			notificationButton,
+            tgbotapi.NewKeyboardButton("📈 Мой прогресс"),
+        ),
+        // Четвертый ряд - управление уведомлениями
         tgbotapi.NewKeyboardButtonRow(
 			tgbotapi.NewKeyboardButton("⬅️ Назад"),
-            notificationButton,
         ),
     )
 }

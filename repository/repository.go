@@ -135,8 +135,8 @@ func (r *PushupRepository) GetUserMaxReps(ctx context.Context, userID int64) (in
 }
 
 // ResetMaxReps сбрасывает max_reps и daily_norm пользователя на значение по умолчанию
-func (r *PushupRepository) ResetMaxReps(ctx context.Context, userID int64) error {
-	query := `UPDATE users SET max_reps = 0, daily_norm = 40 WHERE user_id = $1`
+func (r *PushupRepository) ResetDailyNorm(ctx context.Context, userID int64) error {
+	query := `UPDATE users SET daily_norm = 40 WHERE user_id = $1`
 	_, err := r.pool.Exec(ctx, query, userID)
 	return err
 }
