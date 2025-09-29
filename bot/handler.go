@@ -22,10 +22,11 @@ const (
 	inputTypeCustomNorm
 )
 const (
-	oneTimeEntryLimit = 1000
-	maxRepsLimit = 500
+	oneTimeEntryLimit    = 1000
+	maxRepsLimit         = 500
 	castomDailyNormLimit = 500
 )
+
 type pendingInput struct {
 	inputType   inputType
 	messageID   int
@@ -133,8 +134,8 @@ func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
 
 	// Сброс дневной нормы и maxReps
 	if text == "/reset_norm" {
-		if err := h.service.ResetMaxReps(ctx, userID); err != nil {
-			log.Printf("Ошибка сброса max_reps: %v", err)
+		if err := h.service.ResetDailyNorm(ctx, userID); err != nil {
+			log.Printf("Ошибка сброса daily_norm: %v", err)
 			h.bot.Send(tgbotapi.NewMessage(chatID, "Произошла ошибка при сбросе. Попробуйте позже."))
 			return
 		}
@@ -163,7 +164,7 @@ func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
 		h.handleStart(ctx, chatID, userID, username, notificationsEnabled)
 	case "➕ Добавить отжимания":
 		h.requestPushupCount(chatID, perDayLimit)
-	case "🎯 Определить норму":
+	case "🎯 Тест максимальных отжиманий":
 		h.requestMaxReps(chatID)
 	case "📝 Установить норму":
 		h.requestCustomNorm(chatID)
@@ -175,10 +176,14 @@ func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
 		h.handleToggleNotifications(ctx, userID, chatID, false)
 	case "🔔 Включить напоминания":
 		h.handleToggleNotifications(ctx, userID, chatID, true)
-	case "⚙️ Настройки и статистика":
+	case "⚙️ Дополнительно":
 		msg := tgbotapi.NewMessage(chatID, "Выберите действие:")
 		msg.ReplyMarkup = ui.SettingsKeyboard(notificationsEnabled)
 		h.bot.Send(msg)
+	case "/info":
+		h.handleInfo(chatID, notificationsEnabled)
+	case "📈 Мой прогресс":
+		h.handleProgressHistory(ctx, userID, chatID, notificationsEnabled)
 	case "⬅️ Назад":
 		msg := tgbotapi.NewMessage(chatID, "Главное меню:")
 		msg.ReplyMarkup = ui.MainKeyboard(notificationsEnabled)
@@ -214,11 +219,11 @@ func (h *BotHandler) handleAddPushups(ctx context.Context, userID int64, usernam
 	}
 
 	if count > oneTimeEntryLimit {
-        msg := tgbotapi.NewMessage(chatID, "❌ Превышен лимит разового ввода (1000 отжиманий)")
+		msg := tgbotapi.NewMessage(chatID, "❌ Превышен лимит разового ввода (1000 отжиманий)")
 		msg.ReplyMarkup = ui.MainKeyboard(notEnable)
-        h.bot.Send(msg)
-        return
-    }
+		h.bot.Send(msg)
+		return
+	}
 
 	result, err := h.service.AddPushups(ctx, userID, username, count)
 	if err != nil {
@@ -234,7 +239,7 @@ func (h *BotHandler) handleAddPushups(ctx context.Context, userID int64, usernam
 
 	// Проверка выполнения нормы
 	hasCompleted, firstCompleter := h.service.CheckNormCompletion(ctx, result.DailyNorm)
-	
+
 	if result.TotalToday >= result.DailyNorm {
 		response += "\n🎯 Ты выполнил дневную норму!\n"
 	} else {
@@ -246,6 +251,7 @@ func (h *BotHandler) handleAddPushups(ctx context.Context, userID int64, usernam
 	}
 
 	msg := tgbotapi.NewMessage(chatID, response)
+	//msg.ParseMode = "Markdown"
 	msg.ReplyMarkup = ui.MainKeyboard(notEnable)
 	h.bot.Send(msg)
 }
@@ -270,30 +276,87 @@ func (h *BotHandler) handleSetMaxReps(ctx context.Context, userID int64, usernam
 	}
 
 	if count > maxRepsLimit {
-        msg := tgbotapi.NewMessage(chatID, "❌ Превышен лимит для одного подхода (500 отжиманий)")
+		msg := tgbotapi.NewMessage(chatID, "❌ Превышен лимит для одного подхода (500 отжиманий)")
 		msg.ReplyMarkup = ui.MainKeyboard(notEnable)
-        h.bot.Send(msg)
-        return
-    }
-
-	err := h.service.SetMaxReps(ctx, userID, username, count) 
-	if err != nil {
-		log.Printf("Ошибка при при записи max_reps: %v", err)
-	}
-
-	delyNorm := service.CalculateDailyNorm(count)
-
-	err = h.service.SetDailyNorm(ctx, userID, delyNorm)
-	if err != nil {
-		log.Printf("Ошибка при определении нормы: %v", err)
-		msg := tgbotapi.NewMessage(chatID, "Произошла ошибка. Попробуйте позже или введите /start.")
 		h.bot.Send(msg)
 		return
 	}
 
-	response := fmt.Sprintf("🔔Твоя дневная норма установлена: %d\n", delyNorm)
+	// Сохраняем текущее максимальное количество отжиманий
+	err := h.service.SetMaxReps(ctx, userID, username, count)
+	if err != nil {
+		log.Printf("Ошибка при записи max_reps: %v", err)
+		msg := tgbotapi.NewMessage(chatID, "Произошла ошибка. Попробуйте позже.")
+		msg.ReplyMarkup = ui.MainKeyboard(notEnable)
+		//msg.ParseMode = "Markdown"
+		h.bot.Send(msg)
+		return
+	}
 
-	log.Printf("Username%s UserID %d set %d dely_norm", username, userID, delyNorm)
+	// Рассчитываем и устанавливаем дневную норму
+	dailyNorm := service.CalculateDailyNorm(count)
+	err = h.service.SetDailyNorm(ctx, userID, dailyNorm)
+	if err != nil {
+		log.Printf("Ошибка при определении нормы: %v", err)
+		msg := tgbotapi.NewMessage(chatID, "Произошла ошибка. Попробуйте позже.")
+		msg.ReplyMarkup = ui.MainKeyboard(notEnable)
+		h.bot.Send(msg)
+		return
+	}
+
+	// Получаем историю максимальных отжиманий
+	history, err := h.service.GetMaxRepsHistory(ctx, userID)
+	if err != nil {
+		log.Printf("Ошибка получения истории max_reps: %v", err)
+		// Продолжаем выполнение, даже если история недоступна
+	}
+
+	record, err := h.service.GetMaxRepsRecord(ctx, userID)
+	if err != nil {
+		log.Printf("Ошибка получения рекорда max_reps: %v", err)
+		// Продолжаем выполнение, даже если история недоступна
+	}
+
+	// Формируем ответ с историей
+	response := fmt.Sprintf("✅ Твой результат: %d отжиманий за подход!\n\n", count)
+	response += fmt.Sprintf("🔔 Дневная норма установлена: %d\n\n", dailyNorm)
+	response += fmt.Sprintf("🎖️ Твой текущий ранг: %s!\n\n", service.GetUserRank(count))
+
+	repsToNextRank := service.GetRepsToNextRank(count)
+	if repsToNextRank > 0 {
+		response += fmt.Sprintf("🎯 До следующего ранга тебе осталось: +%d\n\n", repsToNextRank)
+	}
+
+	if record.MaxReps != 0 {
+		response += fmt.Sprintf("💪 Твой рекорд: %s → %d отжиманий!\n\n",
+			record.Date.Format("02.01.2006"),
+			record.MaxReps)
+	}
+
+	if len(history) >= 2 {
+		response += "📝 Твой предыдущий результат:\n"
+
+		item := history[1]
+		response += fmt.Sprintf("• %s → %d\n",
+			item.Date.Format("02.01.2006"),
+			item.MaxReps)
+
+		// Анализ прогресса
+		if len(history) > 1 {
+			latest := history[0].MaxReps
+			previous := history[1].MaxReps
+			if latest > previous {
+				progress := latest - previous
+				response += fmt.Sprintf("\n🎉 Прогресс: +%d отжиманий! 💪", progress)
+			} else if latest == previous {
+				response += "\n📊 Стабильный результат! 🎯"
+			}
+		}
+	} else {
+		response += "\n🎯 Это твой первый рекорд! Начнем отслеживать прогресс!"
+	}
+
+	log.Printf("Username %s UserID %d set max_reps: %d, daily_norm: %d", username, userID, count, dailyNorm)
 
 	msg := tgbotapi.NewMessage(chatID, response)
 	msg.ReplyMarkup = ui.MainKeyboard(notEnable)
@@ -405,7 +468,7 @@ func generateProgressBar(current, total, barWidth int) string {
 		suffix = " 🏆"
 	}
 
-	return fmt.Sprintf("Прогресс: [%s] %d%%%s", bar, percentText, suffix)
+	return fmt.Sprintf("Прогресс за день: [%s] %d%%%s", bar, percentText, suffix)
 }
 
 func (h *BotHandler) handleTotalStat(ctx context.Context, userID int64, chatID int64, notEnable bool) {
@@ -427,7 +490,6 @@ func (h *BotHandler) handleTotalStat(ctx context.Context, userID int64, chatID i
 		statText = fmt.Sprintf("💪За все время ты отжался: %d %s\n", total, formatTimesWord(total))
 		FirstWorkoutDateText = fmt.Sprintf("Первая тренировка: %s", firstWorkoutDate)
 	}
-	
 
 	msg := tgbotapi.NewMessage(chatID, statText+FirstWorkoutDateText)
 	msg.ReplyMarkup = ui.MainKeyboard(notEnable)
@@ -451,7 +513,6 @@ func formatTimesWord(n int) string {
 }
 
 func (h *BotHandler) handleStart(ctx context.Context, chatID int64, userID int64, username string, notEnable bool) {
-
 	err := h.service.EnsureUser(ctx, userID, username)
 	if err != nil {
 		log.Printf("Ошибка при попытке создать или обновить пользователя: %v", err)
@@ -464,14 +525,31 @@ func (h *BotHandler) handleStart(ctx context.Context, chatID int64, userID int64
 		return
 	}
 
+	welcomeMsg := `*Добро пожаловать в бот для учёта отжиманий!*
+
+Я помогу вам:
+• 📊 Следить за ежедневным прогрессом
+• 🎯 Определить вашу персональную норму
+• 📈 Отслеживать рост силы over time
+• 🔔 Напоминать о тренировках
+
+🚀 *Чтобы начать:*
+1. Сделайте *«🎯 Тест максимальных отжиманий»* для установки нормы
+2. Ежедневно добавляйте отжимания кнопкой *«➕ Добавить отжимания»*
+3. Следите за прогрессом в *«📈 Мой прогресс»*
+
+📖 Подробная инструкция — /info`
+
 	if maxReps == 0 {
-		msg := tgbotapi.NewMessage(chatID, "Необходимо определить твою дневную норму!")
+		msg := tgbotapi.NewMessage(chatID, welcomeMsg)
+		msg.ParseMode = "Markdown"
 		h.bot.Send(msg)
 		h.requestMaxReps(chatID)
 		return
 	}
 
-	msg := tgbotapi.NewMessage(chatID, "Выберите действие:")
+	msg := tgbotapi.NewMessage(chatID, welcomeMsg+"\n\nВыберите действие:")
+	msg.ParseMode = "Markdown"
 	msg.ReplyMarkup = ui.MainKeyboard(notEnable)
 	h.bot.Send(msg)
 }
@@ -516,12 +594,12 @@ func (h *BotHandler) handleSetCustomNorm(ctx context.Context, userID int64, chat
 		return
 	}
 
-	 if dailyNorm > castomDailyNormLimit {
-        msg := tgbotapi.NewMessage(chatID, "❌ Максимальная дневная норма - 500 отжиманий")
+	if dailyNorm > castomDailyNormLimit {
+		msg := tgbotapi.NewMessage(chatID, "❌ Максимальная дневная норма - 500 отжиманий")
 		msg.ReplyMarkup = ui.MainKeyboard(notEnable)
-        h.bot.Send(msg)
-        return
-    }
+		h.bot.Send(msg)
+		return
+	}
 
 	err := h.service.SetDailyNorm(ctx, userID, dailyNorm)
 	if err != nil {
@@ -597,7 +675,7 @@ func (h *BotHandler) handleToggleNotifications(ctx context.Context, userID int64
 		err = h.service.EnableNotifications(ctx, userID)
 		message = "🔔 Напоминания включены! Буду напоминать о тренировках."
 	} else {
-		
+
 		err = h.service.DisableNotifications(ctx, userID)
 		message = "🔕 Напоминания отключены. Не забывай тренироваться самостоятельно! 💪"
 	}
@@ -612,5 +690,117 @@ func (h *BotHandler) handleToggleNotifications(ctx context.Context, userID int64
 
 	msg := tgbotapi.NewMessage(chatID, message)
 	msg.ReplyMarkup = ui.MainKeyboard(enable)
+	h.bot.Send(msg)
+}
+
+// handleProgressHistory метод для обработки истории прогресса
+func (h *BotHandler) handleProgressHistory(ctx context.Context, userID int64, chatID int64, notEnable bool) {
+	history, err := h.service.GetMaxRepsHistory(ctx, userID)
+	if err != nil {
+		log.Printf("Ошибка получения истории прогресса: %v", err)
+		msg := tgbotapi.NewMessage(chatID, "❌ Ошибка загрузки истории прогресса")
+		msg.ReplyMarkup = ui.MainKeyboard(notEnable)
+		h.bot.Send(msg)
+		return
+	}
+
+	if len(history) == 0 {
+		msg := tgbotapi.NewMessage(chatID, "📊 История прогресса пуста.\nИспользуй \"🎯 Обновить прогресс\" что бы начать историю прогресса!")
+		msg.ReplyMarkup = ui.MainKeyboard(notEnable)
+		h.bot.Send(msg)
+		return
+	}
+
+	var response strings.Builder
+	response.WriteString("📈 Твоя история прогресса максимальных отжиманий:\n\n")
+
+	for i := 0; i < len(history); i++ {
+		response.WriteString(fmt.Sprintf("%d. %s → %d отжиманий\n",
+			i+1,
+			history[len(history)-1-i].Date.Format("02.01.2006"),
+			history[len(history)-1-i].MaxReps))
+	}
+
+	// Анализ общего прогресса
+	if len(history) > 1 {
+		first := history[len(history)-1].MaxReps
+		last := history[0].MaxReps
+		progress := last - first
+
+		response.WriteString("\n📊 Общий прогресс: ")
+		if progress > 0 {
+			response.WriteString(fmt.Sprintf("+%d отжиманий! 🚀", progress))
+		} else if progress < 0 {
+			response.WriteString(fmt.Sprintf("%d отжиманий 📉", progress))
+		} else {
+			response.WriteString("стабильно! 🎯")
+		}
+	}
+
+	msg := tgbotapi.NewMessage(chatID, response.String())
+	msg.ReplyMarkup = ui.MainKeyboard(notEnable)
+	h.bot.Send(msg)
+
+	err = service.SendSchedule(h.bot, chatID, history)
+	if err != nil {
+		log.Println(err)
+	}
+}
+
+// handleInfo отправляет инструкцию по использованию бота
+func (h *BotHandler) handleInfo(chatID int64, notEnable bool) {
+	instruction := `🤖 *Инструкция по использованию бота*
+
+🎯 *Основные функции*
+
+*➕ Добавить отжимания*
+Записывайте ежедневные отжимания в общую статистику
+Показывает текущий прогресс выполнения дневной нормы
+Участвуйте в соревновании - кто первый выполнит норму сегодня!
+
+*⚙️ Дополнительное меню* -> настройки, статистика и прогресс
+
+*🎯 Тест максимальных отжиманий*
+Определите ваш рекорд в одном подходе
+На основе результата устанавливается персональная дневная норма
+Получите свой ранг силы и увидите прогресс до следующего уровня
+_Рекомендуется обновлять каждые 1-2 недели_
+(Не влияет на выполнение дневной нормы и статистику)
+
+*📊 Статистика* 
+└─ *Сегодня*: ваш прогресс и процент выполнения нормы
+└─ *Общая*: сумма всех отжиманий за всё время
+└─ *Рейтинг*: таблица лидеров среди всех пользователей
+
+*📈 Мой прогресс*
+График и список всех ваших рекордов за подход
+Отслеживайте динамику роста силы
+
+*📝 Установить норму*
+Ручная установка индивидуальной дневной нормы
+Полезно если хотите тренироваться по собственному плану
+
+🔔 *Уведомления*
+
+*Напоминания о тренировках*
+Автоматическое напоминание если вы не выполнили норму за 2 дня
+Можно отключить/включить в любой момент
+
+*Напоминания о прогрессе*
+Бот предложит обновить рекорд если прошла неделя
+Помогает не забывать отслеживать рост силы
+
+💡 *Советы по использованию*
+
+1. *Начните с теста* - определите свой текущий уровень
+2. *Регулярно добавляйте отжимания* - даже небольшие подходы
+3. *Обновляйте рекорд* каждые 1-2 недели
+4. *Следите за прогрессом* через историю и графики
+
+🚀 *Начните сейчас с кнопки «🎯 Тест максимальных отжиманий»!*`
+
+	msg := tgbotapi.NewMessage(chatID, instruction)
+	msg.ParseMode = "Markdown"
+	msg.ReplyMarkup = ui.MainKeyboard(notEnable)
 	h.bot.Send(msg)
 }

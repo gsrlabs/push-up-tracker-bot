@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
-	
+
 	"sync"
 	"time"
 
@@ -47,11 +47,11 @@ func main() {
 	}
 
 	// Проверяем подключение к боту
-    if _, err := telegramBot.GetMe(); err != nil {
-        log.Fatalf("Ошибка подключения к боту: %v", err)
-    }
+	if _, err := telegramBot.GetMe(); err != nil {
+		log.Fatalf("Ошибка подключения к боту: %v", err)
+	}
 
-    log.Println("✅ Бот успешно подключен")
+	log.Println("✅ Бот успешно подключен")
 
 	// 3. Настройка режима отладки
 	// В режиме отладки бот выводит подробную информацию о своих действиях
@@ -64,7 +64,7 @@ func main() {
 
 	// 4. Получение URL базы данных из переменных окружения
 	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" { 
+	if dbURL == "" {
 		log.Fatal("DATABASE_URL не указан. Установите переменную окружения DATABASE_URL")
 	}
 
@@ -82,9 +82,9 @@ func main() {
 	dbPool.Config().MaxConns = 10
 	// Максимальное время простаивания соединения
 	dbPool.Config().MaxConnIdleTime = 30 * time.Minute
-	
+
 	// 7. Инициализация слоев приложения (архитектура Clean Architecture)
-	
+
 	// Репозиторий для работы с данными отжиманий
 	pushupRepo := repository.NewPushupRepository(dbPool)
 
@@ -100,25 +100,25 @@ func main() {
 	// Обработчик Telegram бота
 	botHandler := bot.NewBotHandler(telegramBot, pushupService)
 
-	
-	
-     //go botHandler.CleanupExpiredInputs() 
-     // Запускаем фоновую очистку
+	// Запускаем фоновую очистку
 	// 8. Настройка получения обновлений от Telegram
 	// NewUpdate(0) - получаем все обновления с момента запуска
 	// Timeout - таймаут длительного опроса
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
 
-  
 	// Получение канала обновлений
 	updates := telegramBot.GetUpdatesChan(u)
-
 
 	reminderService := service.NewReminderService(pushupService, telegramBot)
 	reminderService.StartReminderChecker()
 
 	log.Println("Сервис напоминаний запущен")
+
+	progressReminderService := service.NewProgressReminderService(pushupService, telegramBot)
+	progressReminderService.StartProgressChecker()
+
+	log.Println("Сервис напоминаний о прогрессе запущен")
 
 	// WaitGroup для ожидания завершения всех обработчиков
 	var wg sync.WaitGroup
@@ -134,7 +134,7 @@ func main() {
 
 			// Обработка обновления
 			botHandler.HandleUpdate(update)
-			
+
 		}(update)
 
 	}

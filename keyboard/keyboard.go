@@ -9,7 +9,7 @@ func MainKeyboard(notificationsEnabled bool) tgbotapi.ReplyKeyboardMarkup {
 			tgbotapi.NewKeyboardButton("➕ Добавить отжимания"),
 		),
 		tgbotapi.NewKeyboardButtonRow(
-			tgbotapi.NewKeyboardButton("⚙️ Настройки и статистика"),
+			tgbotapi.NewKeyboardButton("⚙️ Дополнительно"),
 		),
 	)
 }
@@ -24,21 +24,25 @@ func SettingsKeyboard(notificationsEnabled bool) tgbotapi.ReplyKeyboardMarkup {
 	}
 	
 	return tgbotapi.NewReplyKeyboard(
-		// Первый ряд - основные настройки
-		tgbotapi.NewKeyboardButtonRow(
-			tgbotapi.NewKeyboardButton("📝 Установить норму"),
-			tgbotapi.NewKeyboardButton("🎯 Определить норму"),
-		),
-		// Второй ряд - дополнительные функции
-		tgbotapi.NewKeyboardButtonRow(
-			notificationButton,
+        // Первый ряд - основные настройки
+        tgbotapi.NewKeyboardButtonRow(
+            tgbotapi.NewKeyboardButton("🎯 Тест максимальных отжиманий"),
+        ),
+		 // Второй ряд - основные настройки
+        tgbotapi.NewKeyboardButtonRow(
+            tgbotapi.NewKeyboardButton("📝 Установить норму"),
 			tgbotapi.NewKeyboardButton("📊 Статистика"),
-		),
-		// Третий ряд - управление уведомлениями
-		tgbotapi.NewKeyboardButtonRow(
+        ),
+        // Третий ряд - дополнительные функции
+        tgbotapi.NewKeyboardButtonRow(
+			notificationButton,
+            tgbotapi.NewKeyboardButton("📈 Мой прогресс"),
+        ),
+        // Четвертый ряд - управление уведомлениями
+        tgbotapi.NewKeyboardButtonRow(
 			tgbotapi.NewKeyboardButton("⬅️ Назад"),
-		),
-	)
+        ),
+    )
 }
 
 
