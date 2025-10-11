@@ -180,7 +180,7 @@ func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
 		msg := tgbotapi.NewMessage(chatID, "Выберите действие:")
 		msg.ReplyMarkup = ui.SettingsKeyboard(notificationsEnabled)
 		h.bot.Send(msg)
-	case "/info":
+	case "/info", "/help":
 		h.handleInfo(chatID, notificationsEnabled)
 	case "📈 Мой прогресс":
 		h.handleProgressHistory(ctx, userID, chatID, notificationsEnabled)
