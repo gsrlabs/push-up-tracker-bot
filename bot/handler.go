@@ -159,6 +159,27 @@ func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
 		return
 	}
 
+	// В switch в HandleUpdate добавляем:
+if text == "/test_progress_reminder" {
+    if !h.adminIDs[userID] {
+        h.bot.Send(tgbotapi.NewMessage(chatID, "⛔ У тебя нет прав для этой команды"))
+        return
+    }
+    
+    // Создаем тестовый сервис
+    testService := service.NewProgressReminderService(h.service, h.bot)
+    
+    // Запускаем тест для текущего пользователя
+    go func() {
+        ctx := context.Background()
+        testService.TestReminderForUser(ctx, userID)
+    }()
+    
+    msg := tgbotapi.NewMessage(chatID, "🔬 Тест напоминания запущен! Ожидай сообщение...")
+    h.bot.Send(msg)
+    return
+}
+
 	switch text {
 	case "/start":
 		h.handleStart(ctx, chatID, userID, username, notificationsEnabled)
