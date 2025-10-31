@@ -110,7 +110,7 @@ func (prs *ProgressReminderService) getUsersForProgressReminder(ctx context.Cont
     return users, nil
 }
 
-// 🔬 ДОБАВЛЯЕМ ТЕСТОВЫЙ МЕТОД ДЛЯ РУЧНОГО ЗАПУСКА
+// ДОБАВЛЯЕМ ТЕСТОВЫЙ МЕТОД ДЛЯ РУЧНОГО ЗАПУСКА
 func (prs *ProgressReminderService) TestReminderForUser(ctx context.Context, userID int64) {
     log.Printf("Ручной запуск напоминания для пользователя %d", userID)
     

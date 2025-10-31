@@ -116,6 +116,13 @@ func (r *PushupRepository) SetMaxReps(ctx context.Context, userID int64, count i
     return err
 }
 
+// SetDateCompletionOfDailyNorm установка даты выполнения дневной нормы
+func (r *PushupRepository) SetDateCompletionOfDailyNorm(ctx context.Context, userID int64) error {
+    query := `UPDATE users SET last_updated = CURRENT_TIMESTAMP, last_notifications = NULL WHERE user_id = $1`
+    _, err := r.pool.Exec(ctx, query, userID)
+    return err
+}
+
 // GetLastMaxRepsUpdate возвращает дату последнего обновления max_reps
 func (r *PushupRepository) GetLastMaxRepsUpdate(ctx context.Context, userID int64) (time.Time, error) {
     query := `SELECT last_updated_max_reps FROM users WHERE user_id = $1`
@@ -272,3 +279,43 @@ func (r *PushupRepository) GetMaxRepsRecord(ctx context.Context, userID int64) (
 }
 
 
+// Добавляем методы для работы с уведомлениями
+func (r *PushupRepository) UpdateLastNotification(ctx context.Context, userID int64) error {
+    query := `UPDATE users SET last_notification = CURRENT_TIMESTAMP WHERE user_id = $1`
+    _, err := r.pool.Exec(ctx, query, userID)
+    return err
+}
+
+func (r *PushupRepository) GetUsersForReminder(ctx context.Context) ([]int64, error) {
+    query := `
+    SELECT u.user_id
+    FROM users u
+    WHERE u.notifications_enabled = TRUE
+      AND EXISTS (
+        SELECT 1 
+        FROM pushups p 
+        WHERE p.user_id = u.user_id 
+          AND p.date = CURRENT_DATE
+        HAVING COALESCE(SUM(p.count), 0) < u.daily_norm
+      )
+      AND (u.last_notification IS NULL 
+           OR u.last_notification <= CURRENT_TIMESTAMP - INTERVAL '24 hours')
+      AND u.last_updated <= CURRENT_TIMESTAMP - INTERVAL '48 hours'
+    ORDER BY u.user_id`
+
+    rows, err := r.pool.Query(ctx, query)
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()
+
+    var userIDs []int64
+    for rows.Next() {
+        var userID int64
+        if err := rows.Scan(&userID); err != nil {
+            return nil, err
+        }
+        userIDs = append(userIDs, userID)
+    }
+    return userIDs, nil
+}
