@@ -54,6 +54,10 @@ func (s *PushupService) SetDailyNorm(ctx context.Context, userID int64, dailyNor
 	return s.repo.SetDailyNorm(ctx, userID, dailyNorm)
 }
 
+func (s *PushupService) SetDateCompletionOfDailyNorm(ctx context.Context, userID int64) error {
+	return s.repo.SetDateCompletionOfDailyNorm(ctx, userID)
+}
+
 func (s *PushupService) GetDailyNorm(ctx context.Context, userID int64) (int, error) {
 	return s.repo.GetDailyNorm(ctx, userID)
 }
@@ -169,4 +173,13 @@ func (s *PushupService) GetNotificationsStatus(ctx context.Context, userID int64
 
 func (s *PushupService) DebugCache() *cache.TodayCache {
 	return s.cache
+}
+
+
+func (s *PushupService) UpdateLastNotification(ctx context.Context, userID int64) error {
+    return s.repo.UpdateLastNotification(ctx, userID)
+}
+
+func (s *PushupService) GetUsersForReminder(ctx context.Context) ([]int64, error) {
+    return s.repo.GetUsersForReminder(ctx)
 }

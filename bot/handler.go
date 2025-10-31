@@ -160,25 +160,25 @@ func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
 	}
 
 	// В switch в HandleUpdate добавляем:
-if text == "/test_progress_reminder" {
-    if !h.adminIDs[userID] {
-        h.bot.Send(tgbotapi.NewMessage(chatID, "⛔ У тебя нет прав для этой команды"))
-        return
-    }
-    
-    // Создаем тестовый сервис
-    testService := service.NewProgressReminderService(h.service, h.bot)
-    
-    // Запускаем тест для текущего пользователя
-    go func() {
-        ctx := context.Background()
-        testService.TestReminderForUser(ctx, userID)
-    }()
-    
-    msg := tgbotapi.NewMessage(chatID, "🔬 Тест напоминания запущен! Ожидай сообщение...")
-    h.bot.Send(msg)
-    return
-}
+	if text == "/test_progress_reminder" {
+		if !h.adminIDs[userID] {
+			h.bot.Send(tgbotapi.NewMessage(chatID, "⛔ У тебя нет прав для этой команды"))
+			return
+		}
+
+		// Создаем тестовый сервис
+		testService := service.NewProgressReminderService(h.service, h.bot)
+
+		// Запускаем тест для текущего пользователя
+		go func() {
+			ctx := context.Background()
+			testService.TestReminderForUser(ctx, userID)
+		}()
+
+		msg := tgbotapi.NewMessage(chatID, "🔬 Тест напоминания запущен! Ожидай сообщение...")
+		h.bot.Send(msg)
+		return
+	}
 
 	switch text {
 	case "/start":
@@ -263,6 +263,9 @@ func (h *BotHandler) handleAddPushups(ctx context.Context, userID int64, usernam
 
 	if result.TotalToday >= result.DailyNorm {
 		response += "\n🎯 Ты выполнил дневную норму!\n"
+		if err := h.service.SetDateCompletionOfDailyNorm(ctx, userID); err != nil {
+			log.Printf("Ошибка обновления даты выполнения нормы: %v", err)
+		}
 	} else {
 		if !hasCompleted {
 			response += "\n❌ Никто еще не выполнил норму сегодня.\nМожет, ты будешь первым? 💪\n"
@@ -453,43 +456,11 @@ func (h *BotHandler) handleTodayStat(ctx context.Context, userID int64, chatID i
 		return
 	}
 
-	daylyStatText := fmt.Sprintf("📊Сегодня ты отжался %d/%d %s.\n%s\n", total, dailyNorm, formatTimesWord(total), generateProgressBar(total, dailyNorm, 10))
+	daylyStatText := fmt.Sprintf("📊Сегодня ты отжался %d/%d %s.\n%s\n", total, dailyNorm, service.FormatTimesWord(total), service.GenerateProgressBar(total, dailyNorm, 10))
 
 	msg := tgbotapi.NewMessage(chatID, daylyStatText)
 	msg.ReplyMarkup = ui.MainKeyboard(notEnable)
 	h.bot.Send(msg)
-}
-
-func generateProgressBar(current, total, barWidth int) string {
-	if total <= 0 || barWidth <= 0 {
-		return "Прогресс: [не определён]"
-	}
-
-	percentage := float64(current) / float64(total)
-	clamped := percentage
-	if clamped > 1 {
-		clamped = 1
-	}
-
-	filled := int(clamped * float64(barWidth))
-	if filled > barWidth {
-		filled = barWidth
-	}
-	if filled < 0 {
-		filled = 0
-	}
-	empty := barWidth - filled
-
-	bar := strings.Repeat("█", filled) + strings.Repeat("░", empty) // или  ░ ▒ ▓ █ 🪫 🔋
-	percentText := int(percentage * 100)
-
-	// Добавим бонусную метку если перевыполнил
-	suffix := ""
-	if percentage > 1 {
-		suffix = " 🏆"
-	}
-
-	return fmt.Sprintf("Прогресс за день: [%s] %d%%%s", bar, percentText, suffix)
 }
 
 func (h *BotHandler) handleTotalStat(ctx context.Context, userID int64, chatID int64, notEnable bool) {
@@ -508,29 +479,13 @@ func (h *BotHandler) handleTotalStat(ctx context.Context, userID int64, chatID i
 	if err != nil || firstWorkoutDate == "01.01.0001" {
 		FirstWorkoutDateText = "Ты ещё не начинал тренироваться"
 	} else {
-		statText = fmt.Sprintf("💪За все время ты отжался: %d %s\n", total, formatTimesWord(total))
+		statText = fmt.Sprintf("💪За все время ты отжался: %d %s\n", total, service.FormatTimesWord(total))
 		FirstWorkoutDateText = fmt.Sprintf("Первая тренировка: %s", firstWorkoutDate)
 	}
 
 	msg := tgbotapi.NewMessage(chatID, statText+FirstWorkoutDateText)
 	msg.ReplyMarkup = ui.MainKeyboard(notEnable)
 	h.bot.Send(msg)
-}
-
-func formatTimesWord(n int) string {
-	n = n % 100 // учитываем "11–14"
-	if n >= 11 && n <= 14 {
-		return "раз"
-	}
-
-	switch n % 10 {
-	case 1:
-		return "раз"
-	case 2, 3, 4:
-		return "раза"
-	default:
-		return "раз"
-	}
 }
 
 func (h *BotHandler) handleStart(ctx context.Context, chatID int64, userID int64, username string, notEnable bool) {
