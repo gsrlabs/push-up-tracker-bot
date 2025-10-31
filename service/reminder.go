@@ -28,7 +28,7 @@ func (rs *ReminderService) StartReminderChecker() {
 
 func (rs *ReminderService) checkReminders() {
 	// Проверяем каждые 48 часов
-	ticker := time.NewTicker(15 * time.Second)
+	ticker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
 
 	for range ticker.C {

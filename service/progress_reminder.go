@@ -31,8 +31,6 @@ func (prs *ProgressReminderService) checkProgressReminders() {
     ticker := time.NewTicker(24 * time.Hour)
     defer ticker.Stop()
 
-    log.Println("Сервис напоминаний о прогрессе запущен")
-    
     // Первая проверка через 10 секунд после запуска
     time.Sleep(10 * time.Second)
     prs.forceCheck()
