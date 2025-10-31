@@ -63,7 +63,6 @@ func (prs *ProgressReminderService) forceCheck() {
     }
 }
 
-
 func (prs *ProgressReminderService) getUsersForProgressReminder(ctx context.Context, daysInterval int) ([]UserProgressData, error) {
     query := `
     SELECT 
