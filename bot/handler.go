@@ -456,7 +456,7 @@ func (h *BotHandler) handleTodayStat(ctx context.Context, userID int64, chatID i
 		return
 	}
 
-	daylyStatText := fmt.Sprintf("📊Сегодня ты отжался %d/%d %s.\n%s\n", total, dailyNorm, service.FormatTimesWord(total), service.GenerateProgressBar(total, dailyNorm, 10))
+	daylyStatText := fmt.Sprintf("📊Сегодня ты отжался %s \nТвоя дневная норма: %d \n%s\n", service.FormatTimesWord(total), dailyNorm, service.GenerateProgressBar(total, dailyNorm, 10))
 
 	msg := tgbotapi.NewMessage(chatID, daylyStatText)
 	msg.ReplyMarkup = ui.MainKeyboard(notEnable)
@@ -479,7 +479,7 @@ func (h *BotHandler) handleTotalStat(ctx context.Context, userID int64, chatID i
 	if err != nil || firstWorkoutDate == "01.01.0001" {
 		FirstWorkoutDateText = "Ты ещё не начинал тренироваться"
 	} else {
-		statText = fmt.Sprintf("💪За все время ты отжался: %d %s\n", total, service.FormatTimesWord(total))
+		statText = fmt.Sprintf("💪За все время ты отжался: %s\n", service.FormatTimesWord(total))
 		FirstWorkoutDateText = fmt.Sprintf("Первая тренировка: %s", firstWorkoutDate)
 	}
 
@@ -725,7 +725,7 @@ func (h *BotHandler) handleProgressHistory(ctx context.Context, userID int64, ch
 
 // handleInfo отправляет инструкцию по использованию бота
 func (h *BotHandler) handleInfo(chatID int64, notEnable bool) {
-	instruction := `🤖 *Инструкция по использованию бота*
+	instruction := `🤖 *Инструкция по использованию PushUpper*
 
 🎯 *Основные функции*
 
@@ -763,14 +763,14 @@ _Рекомендуется обновлять каждые 1-2 недели_
 Можно отключить/включить в любой момент
 
 *Напоминания о прогрессе*
-Бот предложит обновить рекорд если прошла неделя
+PushUpper предложит обновить рекорд если прошла неделя
 Помогает не забывать отслеживать рост силы
 
 💡 *Советы по использованию*
 
 1. *Начните с теста* - определите свой текущий уровень
 2. *Регулярно добавляйте отжимания* - даже небольшие подходы
-3. *Обновляйте рекорд* каждые 1-2 недели
+3. *Обновляйте рекорд* раз в неделю
 4. *Следите за прогрессом* через историю и графики
 
 🚀 *Начните сейчас с кнопки «🎯 Тест максимальных отжиманий»!*`
