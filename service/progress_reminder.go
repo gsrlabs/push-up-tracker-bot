@@ -1,173 +1,178 @@
 package service
 
 import (
-    "context"
-    "fmt"
-    "log"
-    "time"
+	"context"
+	"fmt"
+	"log"
+	"time"
 
-    tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-    "trackerbot/keyboard"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"trackerbot/keyboard"
 )
 
 type ProgressReminderService struct {
-    pushupService *PushupService
-    bot           *tgbotapi.BotAPI
+	pushupService *PushupService
+	bot           *tgbotapi.BotAPI
 }
 
 func NewProgressReminderService(pushupService *PushupService, bot *tgbotapi.BotAPI) *ProgressReminderService {
-    return &ProgressReminderService{
-        pushupService: pushupService,
-        bot:           bot,
-    }
+	return &ProgressReminderService{
+		pushupService: pushupService,
+		bot:           bot,
+	}
 }
 
 func (prs *ProgressReminderService) StartProgressChecker() {
-    go prs.checkProgressReminders()
+	go prs.checkProgressReminders()
 }
 
 func (prs *ProgressReminderService) checkProgressReminders() {
-    
-    ticker := time.NewTicker(24 * time.Hour)
-    defer ticker.Stop()
 
-    // Первая проверка через 10 секунд после запуска
-    time.Sleep(10 * time.Second)
-    prs.forceCheck()
-    
-    for range ticker.C {
-        prs.forceCheck()
-    }
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+
+	// Первая проверка через 10 секунд после запуска
+	time.Sleep(10 * time.Second)
+	prs.forceCheck()
+
+	for range ticker.C {
+		prs.forceCheck()
+	}
 }
 
-
 func (prs *ProgressReminderService) forceCheck() {
-    ctx := context.Background()
-    
-    usersToRemind, err := prs.getUsersForProgressReminder(ctx, 7)
-    if err != nil {
-        log.Printf("❌ Ошибка запроса: %v", err)
-        return
-    }
+	ctx := context.Background()
 
-    if len(usersToRemind) > 0 {
-        log.Printf("Найдено %d пользователей для напоминания", len(usersToRemind))
-        
-        for _, userData := range usersToRemind {
-            log.Printf("Обработка пользователя %s (ID: %d, max_reps: %d, дней: %d)", 
-                userData.Username, userData.UserID, userData.CurrentMax, userData.DaysPassed)
-            prs.sendProgressReminder(ctx, userData)
-        }
-    } else {
-        log.Printf("Пользователи для напоминания не найдены")
-    }
+	usersToRemind, err := prs.getUsersForProgressReminder(ctx, 7)
+	if err != nil {
+		log.Printf("❌ Ошибка запроса: %v", err)
+		return
+	}
+
+	if len(usersToRemind) > 0 {
+		log.Printf("Найдено %d пользователей для напоминания", len(usersToRemind))
+
+		for _, userData := range usersToRemind {
+			log.Printf("Обработка пользователя %s (ID: %d, max_reps: %d, дней: %d)",
+				userData.Username, userData.UserID, userData.CurrentMax, userData.DaysPassed)
+			prs.sendProgressReminder(ctx, userData)
+		}
+	} else {
+		log.Printf("Пользователи для напоминания не найдены")
+	}
 }
 
 func (prs *ProgressReminderService) getUsersForProgressReminder(ctx context.Context, daysInterval int) ([]UserProgressData, error) {
-    query := `
+	query := `
     SELECT 
         user_id,
         username,
         max_reps,
-        last_updated_max_reps,
-        EXTRACT(DAYS FROM (CURRENT_DATE - last_updated_max_reps)) as days_passed
+        last_updated_max_reps
     FROM users 
     WHERE notifications_enabled = TRUE
       AND max_reps > 0
       AND max_reps < 100
-      AND last_updated_max_reps <= CURRENT_DATE - INTERVAL '1 day' * $1
+      AND last_updated_max_reps <= CURRENT_TIMESTAMP - INTERVAL '1 day' * $1
     ORDER BY last_updated_max_reps ASC`
 
-    log.Printf("Выполнение запроса с интервалом %d дней", daysInterval)
-    
-    rows, err := prs.pushupService.repo.Pool().Query(ctx, query, daysInterval)
-    if err != nil {
-        return nil, err
-    }
-    defer rows.Close()
+	log.Printf("Выполнение запроса с интервалом %d дней", daysInterval)
 
-    var users []UserProgressData
-    for rows.Next() {
-        var user UserProgressData
-        var lastUpdate time.Time
-        
-        if err := rows.Scan(&user.UserID, &user.Username, &user.CurrentMax, &lastUpdate, &user.DaysPassed); err != nil {
-            return nil, err
-        }
-        
-        user.LastUpdate = lastUpdate
-        user.NextTarget = user.CurrentMax + CalculateNextTarget(user.CurrentMax)
-        
-        users = append(users, user)
-        
-        log.Printf("Найден пользователь - %s: max_reps=%d, last_update=%s", 
-            user.Username, user.CurrentMax, lastUpdate.Format("2006-01-02"))
-    }
+	rows, err := prs.pushupService.repo.Pool().Query(ctx, query, daysInterval)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
 
-    return users, nil
+	var users []UserProgressData
+	for rows.Next() {
+		var user UserProgressData
+		var lastUpdate time.Time
+
+		if err := rows.Scan(&user.UserID, &user.Username, &user.CurrentMax, &lastUpdate); err != nil {
+			return nil, err
+		}
+
+		// ТОЧНОЕ ВЫЧИСЛЕНИЕ ДНЕЙ В UTC
+		nowUTC := time.Now().UTC().Truncate(24 * time.Hour)
+		lastUpdateUTC := lastUpdate.Truncate(24 * time.Hour)
+		user.DaysPassed = int(nowUTC.Sub(lastUpdateUTC).Hours() / 24)
+
+		user.LastUpdate = lastUpdate
+		user.NextTarget = user.CurrentMax + CalculateNextTarget(user.CurrentMax)
+
+		users = append(users, user)
+
+		log.Printf("Найден пользователь - %s: max_reps=%d, last_update=%s, days_passed=%d",
+			user.Username, user.CurrentMax, lastUpdate.Format("2006-01-02"), user.DaysPassed)
+
+		log.Printf("Время в БД: %s, Сейчас UTC: %s, Разница дней: %d",
+			lastUpdate.Format("2006-01-02 15:04:05 MST"),
+			time.Now().UTC().Format("2006-01-02 15:04:05 MST"),
+			user.DaysPassed)
+	}
+
+	return users, nil
 }
 
 // ДОБАВЛЯЕМ ТЕСТОВЫЙ МЕТОД ДЛЯ РУЧНОГО ЗАПУСКА
 func (prs *ProgressReminderService) TestReminderForUser(ctx context.Context, userID int64) {
-    log.Printf("Ручной запуск напоминания для пользователя %d", userID)
-    
-    // Принудительно обновляем дату для тестирования
-    updateQuery := `UPDATE users SET last_updated_max_reps = CURRENT_DATE - INTERVAL '8 days' WHERE user_id = $1`
-    _, err := prs.pushupService.repo.Pool().Exec(ctx, updateQuery, userID)
-    if err != nil {
-        log.Printf("❌ Ошибка обновления даты: %v", err)
-        return
-    }
-    
-    log.Printf("Дата обновлена для пользователя %d", userID)
-    
-    // Ждем немного и запускаем проверку
-    time.Sleep(2 * time.Second)
-    prs.forceCheck()
+	log.Printf("Ручной запуск напоминания для пользователя %d", userID)
+
+	// Принудительно обновляем дату для тестирования (с указанием времени)
+	updateQuery := `UPDATE users SET last_updated_max_reps = CURRENT_TIMESTAMP - INTERVAL '8 days' WHERE user_id = $1`
+	_, err := prs.pushupService.repo.Pool().Exec(ctx, updateQuery, userID)
+	if err != nil {
+		log.Printf("❌ Ошибка обновления даты: %v", err)
+		return
+	}
+
+	log.Printf("Дата обновлена для пользователя %d", userID)
+
+	// Ждем немного и запускаем проверку
+	time.Sleep(2 * time.Second)
+	prs.forceCheck()
 }
 
 // Остальные методы без изменений
 type UserProgressData struct {
-    UserID      int64
-    Username    string
-    CurrentMax  int
-    LastUpdate  time.Time
-    DaysPassed  int
-    NextTarget  int
+	UserID     int64
+	Username   string
+	CurrentMax int
+	LastUpdate time.Time
+	DaysPassed int
+	NextTarget int
 }
 
 func (prs *ProgressReminderService) sendProgressReminder(ctx context.Context, userData UserProgressData) {
-    notificationsEnabled, err := prs.pushupService.GetNotificationsStatus(ctx, userData.UserID)
-    if err != nil || !notificationsEnabled {
-        log.Printf("Пользователь %d отключил уведомления", userData.UserID)
-        return
-    }
+	notificationsEnabled, err := prs.pushupService.GetNotificationsStatus(ctx, userData.UserID)
+	if err != nil || !notificationsEnabled {
+		log.Printf("Пользователь %d отключил уведомления", userData.UserID)
+		return
+	}
 
-		// Проверяем, доступен ли чат
+	// Проверяем, доступен ли чат
 	if !prs.isChatAvailable(userData.UserID) {
 		log.Printf("Пользователь %d недоступен для напоминаний (чат не найден или заблокирован)", userData.UserID)
 		prs.disableNotificationsForUnavailableUser(ctx, userData.UserID)
 		return
 	}
 
-    message := prs.buildProgressMessage(userData)
-    msg := tgbotapi.NewMessage(userData.UserID, message)
-    msg.ParseMode = "Markdown"
-    msg.ReplyMarkup = keyboard.MainKeyboard(notificationsEnabled)
+	message := prs.buildProgressMessage(userData)
+	msg := tgbotapi.NewMessage(userData.UserID, message)
+	msg.ParseMode = "Markdown"
+	msg.ReplyMarkup = keyboard.MainKeyboard(notificationsEnabled)
 
-    if _, err := prs.bot.Send(msg); err != nil {
-        log.Printf("❌ Ошибка отправки: %v", err)
-    } else {
-        log.Printf("Напоминание отправлено пользователю %d", userData.UserID)
-    }
+	if _, err := prs.bot.Send(msg); err != nil {
+		log.Printf("❌ Ошибка отправки: %v", err)
+	} else {
+		log.Printf("Напоминание отправлено пользователю %d", userData.UserID)
+	}
 }
 
 func (prs *ProgressReminderService) buildProgressMessage(userData UserProgressData) string {
 	message := "📈 **Время обновить твой прогресс!**\n\n"
-	message += fmt.Sprintf("Прошло уже **%d дней** с твоего последнего теста максимальных отжиманий.\n\n", userData.DaysPassed)
-
-	message += fmt.Sprintf("💪 Твой текущий рекорд: **%d отжиманий** за подход\n", userData.CurrentMax)
-	message += fmt.Sprintf("🎯 Рекомендуемая цель на эту неделю: **%d отжиманий**\n\n", userData.NextTarget)
+	message += fmt.Sprintf("Прошло уже **%s** с твоего последнего теста максимальных отжиманий.\n\n", FormatDaysCompact(userData.DaysPassed))
 
 	message += fmt.Sprintf("📊 Твой текущий ранг: **%s**\n", GetUserRank(userData.CurrentMax))
 
@@ -177,6 +182,9 @@ func (prs *ProgressReminderService) buildProgressMessage(userData UserProgressDa
 		message += fmt.Sprintf("🌟 До следующего ранга осталось: **+%d отжиманий**\n\n", repsToNextRank)
 	}
 
+    message += fmt.Sprintf("💪 Твой текущий рекорд: **%d отжиманий** за подход\n", userData.CurrentMax)
+	message += fmt.Sprintf("🎯 Рекомендуемая цель: **%d отжиманий**\n\n", userData.NextTarget)
+
 	// Мотивационное сообщение в зависимости от прогресса
 	if userData.DaysPassed > 14 {
 		message += "🚀 Не теряй прогресс! Проверь свои силы и обнови результат!\n"
@@ -185,9 +193,9 @@ func (prs *ProgressReminderService) buildProgressMessage(userData UserProgressDa
 	} else {
 		message += "🔥 Пора проверить, какой прогресс ты сделал за эту неделю!\n"
 	}
-    message += "\nИспользуй кнопку \"🎯 Тест максимальных отжиманий\" чтобы записать новый результат!"
+	message += "\nИспользуй кнопку \"🎯 Тест максимальных отжиманий\" чтобы записать новый результат!"
 
-    return message
+	return message
 }
 
 // Проверяем, доступен ли чат с пользователем

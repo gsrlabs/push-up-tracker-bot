@@ -268,7 +268,7 @@ func formatTimeUnit(value int, one, two, five string) string {
     }
 }
 
-// FormatTimesWord склоняет слово "раз" (адаптированная версия)
+// FormatTimesWord склоняет слово "раз"
 func FormatTimesWord(n int) string {
     return formatTimeUnit(n, "раз", "раза", "раз")
 }
