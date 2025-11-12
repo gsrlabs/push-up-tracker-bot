@@ -9,6 +9,7 @@ database/data/
 # Backup directories
 backups/
 cache/
+today_cache.json
 
 
 # Log files
