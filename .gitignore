@@ -3,8 +3,12 @@
 .env.*.local
 
 # Database
-*.sql
+database/data/
 *.sql.gz
+
+# Backup directories
+backups/
+cache/
 
 
 # Log files
