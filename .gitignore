@@ -1,6 +1,24 @@
+# Environment variables
 .env
-today_cache.json
+.env.*.local
+
+# Database
+database/data/
+*.sql
+*.sql.gz
+
+# Backup directories
+backups/
+cache/
+
+
+# Log files
+*.log
+logs/
+
+# Documentation
 Technical specification.md
-trackerbot
-pushup-tracker-db
 project_structure.md
+
+# Build artifacts
+backend/trackerbot

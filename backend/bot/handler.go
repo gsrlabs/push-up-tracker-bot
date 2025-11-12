@@ -448,6 +448,10 @@ func (h *BotHandler) handleTodayStat(ctx context.Context, userID int64, chatID i
 		return
 	}
 
+	if total == 0 {
+		return
+	}
+
 	dailyNorm, err := h.service.GetDailyNorm(ctx, userID)
 	if err != nil {
 		log.Printf("Ошибка при получении дневной нормы: %v", err)
