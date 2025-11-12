@@ -11,7 +11,7 @@ import (
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5" // Импортируем библиотеку для работы с Telegram API
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/joho/godotenv" // Пакет для работы с переменными окружения
+	//"github.com/joho/godotenv" // Пакет для работы с переменными окружения если запускпть не через докер
 
 	"trackerbot/bot"
 	"trackerbot/cache"
@@ -25,16 +25,16 @@ func main() {
 	// Загрузка переменных окружения из файла .env
 	// Используется пакет godotenv для удобной работы с переменными окружения
 	// В случае ошибки - аварийное завершение программы
-	if err := godotenv.Load(); err != nil {
-		log.Fatal("Ошибка загрузки .env файла")
-	}
+	// if err := godotenv.Load("../.env"); err != nil {
+	// 	log.Fatal("Ошибка загрузки .env файла")
+	// }
 
 	// 1. Получение токена Telegram бота из переменных окружения
 	// Безопасный способ хранения чувствительных данных
 	// При отсутствии токена - аварийное завершение
-	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
+	botToken := os.Getenv("BOT_TOKEN")
 	if botToken == "" {
-		log.Fatal("Токен не указан. Установите переменную окружения TELEGRAM_BOT_TOKEN")
+		log.Fatal("Токен не указан. Установите переменную окружения BOT_TOKEN")
 	}
 	fmt.Println(botToken) // Вывод токена для отладки (в продакшене следует убрать)
 
@@ -63,9 +63,14 @@ func main() {
 	log.Printf("Авторизован как %s", telegramBot.Self.UserName)
 
 	// 4. Получение URL базы данных из переменных окружения
-	dbURL := os.Getenv("DATABASE_URL")
+	dbURL := fmt.Sprintf("postgresql://%s:%s@%s:%s/%s?sslmode=disable",
+		os.Getenv("DB_USER"),
+		os.Getenv("DB_PASSWORD"),
+		os.Getenv("DB_HOST"), // будет "postgres"
+		os.Getenv("DB_PORT"), // будет "5432"
+		os.Getenv("DB_NAME"))
 	if dbURL == "" {
-		log.Fatal("DATABASE_URL не указан. Установите переменную окружения DATABASE_URL")
+		log.Fatal("DATABASE_URL не указан. Установите переменные окружения")
 	}
 
 	// 5. Инициализация пула соединений с PostgreSQL

@@ -1,0 +1,27 @@
+# Git
+.git/
+.gitignore
+
+# Environment
+.env
+.env.*
+
+# Database and data
+database/data/
+backups/
+cache/
+
+# Documentation
+README.md
+Technical specification.md
+project_structure.md
+
+# Scripts (если не нужны в контейнере)
+scripts/
+
+# Logs
+*.log
+logs/
+
+# Build artifacts (на случай если собираете локально)
+backend/trackerbot

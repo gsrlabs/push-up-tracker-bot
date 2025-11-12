@@ -27,7 +27,7 @@ func (rs *ReminderService) StartReminderChecker() {
 }
 
 func (rs *ReminderService) checkReminders() {
-	// Проверяем каждые 48 часов
+	// Проверяем каждые час
 	ticker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
 
@@ -57,9 +57,9 @@ func (rs *ReminderService) sendReminder(ctx context.Context, userID int64) {
 	}
 
 	// Единый запрос со всеми данными
-    var dailyNorm, totalToday int
-    var lastDailyNormDate, lastWorkoutDate time.Time
-    query := `
+	var dailyNorm, totalToday int
+	var lastDailyNormDate, lastWorkoutDate time.Time
+	query := `
         SELECT 
             u.daily_norm,
             u.last_updated,
@@ -76,96 +76,94 @@ func (rs *ReminderService) sendReminder(ctx context.Context, userID int64) {
         FROM users u
         WHERE u.user_id = $1`
 
-    err := rs.pushupService.repo.Pool().QueryRow(ctx, query, userID).Scan(
-        &dailyNorm, 
-        &lastDailyNormDate, 
-        &totalToday, 
-        &lastWorkoutDate,
-    )
-    if err != nil {
-        log.Printf("Ошибка получения статистики пользователя %d: %v", userID, err)
-        return
-    }
+	err := rs.pushupService.repo.Pool().QueryRow(ctx, query, userID).Scan(
+		&dailyNorm,
+		&lastDailyNormDate,
+		&totalToday,
+		&lastWorkoutDate,
+	)
+	if err != nil {
+		log.Printf("Ошибка получения статистики пользователя %d: %v", userID, err)
+		return
+	}
 
-    remaining := dailyNorm - totalToday
-    if remaining <= 0 {
-        return
-    }
+	remaining := dailyNorm - totalToday
+	if remaining <= 0 {
+		return
+	}
 
-    now := time.Now().UTC()
-    hoursWithoutDailyNorm := int(now.Sub(lastDailyNormDate).Hours())
-    hoursWithoutWorkout := int(now.Sub(lastWorkoutDate).Hours())
+	now := time.Now().UTC()
+	hoursWithoutDailyNorm := int(now.Sub(lastDailyNormDate).Hours())
+	hoursWithoutWorkout := int(now.Sub(lastWorkoutDate).Hours())
 
-    message := rs.buildReminderMessage(remaining, dailyNorm, hoursWithoutDailyNorm, hoursWithoutWorkout, lastWorkoutDate)
-    
-    msg := tgbotapi.NewMessage(userID, message)
-    notificationsEnabled, _ := rs.pushupService.GetNotificationsStatus(ctx, userID)
-    msg.ReplyMarkup = keyboard.MainKeyboard(notificationsEnabled)
+	message := rs.buildReminderMessage(remaining, dailyNorm, hoursWithoutDailyNorm, hoursWithoutWorkout, lastWorkoutDate)
 
-    if _, err := rs.bot.Send(msg); err != nil {
-        log.Printf("Ошибка отправки напоминания пользователю %d: %v", userID, err)
-        if rs.isChatNotFoundError(err) {
-            rs.disableNotificationsForUnavailableUser(ctx, userID)
-        }
-    } else {
-        rs.pushupService.UpdateLastNotification(ctx, userID)
-        log.Printf("Напоминание отправлено пользователю %d", userID)
-    }
+	msg := tgbotapi.NewMessage(userID, message)
+	notificationsEnabled, _ := rs.pushupService.GetNotificationsStatus(ctx, userID)
+	msg.ReplyMarkup = keyboard.MainKeyboard(notificationsEnabled)
+
+	if _, err := rs.bot.Send(msg); err != nil {
+		log.Printf("Ошибка отправки напоминания пользователю %d: %v", userID, err)
+		if rs.isChatNotFoundError(err) {
+			rs.disableNotificationsForUnavailableUser(ctx, userID)
+		}
+	} else {
+		rs.pushupService.UpdateLastNotification(ctx, userID)
+		log.Printf("Напоминание отправлено пользователю %d", userID)
+	}
+
 }
 
 func (rs *ReminderService) buildReminderMessage(remaining, dailyNorm, hoursWithoutDailyNorm, hoursWithoutWorkout int, lastWorkoutDate time.Time) string {
     message := "⏰ Напоминание о тренировке!\n\n"
-    
-    today := time.Now().UTC().Truncate(24 * time.Hour)
-    trainedToday := !lastWorkoutDate.Before(today)
-    
-    if !trainedToday {
-        message += "Ты ещё не начал тренироваться сегодня! 💥\n"
+    word := "осталось"
+
+    var zeroTime time.Time
+    if lastWorkoutDate.Equal(zeroTime) || lastWorkoutDate.IsZero() {
+        message += "Ты ещё не начинал тренироваться! 💥\n"
+        word = "необходимо"
     } else {
         // Разбиваем на дни и часы
         daysWithoutNorm := hoursWithoutDailyNorm / 24
         hoursWithoutNorm := hoursWithoutDailyNorm % 24
-        
+
         daysWithoutWorkout := hoursWithoutWorkout / 24
         hoursRemainingWorkout := hoursWithoutWorkout % 24
-        
-        // Форматируем с помощью наших функций
-        var normPeriod, workoutPeriod string
-        
-        if daysWithoutNorm > 0 && hoursWithoutNorm > 0 {
-            normPeriod = fmt.Sprintf("%s и %s", 
-                FormatDaysCompact(daysWithoutNorm), 
-                FormatHoursCompact(hoursWithoutNorm))
-        } else if daysWithoutNorm > 0 {
-            normPeriod = FormatDaysCompact(daysWithoutNorm)
-        } else if hoursWithoutNorm > 0 {
-            normPeriod = FormatHoursCompact(hoursWithoutNorm)
+
+        // Форматируем периоды
+        normPeriod := formatPeriod(daysWithoutNorm, hoursWithoutNorm)
+        workoutPeriod := formatPeriod(daysWithoutWorkout, hoursRemainingWorkout)
+
+        if hoursWithoutDailyNorm == hoursWithoutWorkout {
+            message += fmt.Sprintf("Прошло %s с твоей последней тренировки.\n", workoutPeriod)
         } else {
-            normPeriod = "менее часа"
+            message += fmt.Sprintf("Прошло %s с момента выполнения дневной нормы.\n", normPeriod)
+            message += fmt.Sprintf("А так же %s с твоей последней тренировки.\n", workoutPeriod)
         }
-        
-        if daysWithoutWorkout > 0 && hoursRemainingWorkout > 0 {
-            workoutPeriod = fmt.Sprintf("%s и %s", 
-                FormatDaysCompact(daysWithoutWorkout), 
-                FormatHoursCompact(hoursRemainingWorkout))
-        } else if daysWithoutWorkout > 0 {
-            workoutPeriod = FormatDaysCompact(daysWithoutWorkout)
-        } else if hoursRemainingWorkout > 0 {
-            workoutPeriod = FormatHoursCompact(hoursRemainingWorkout)
-        } else {
-            workoutPeriod = "менее часа"
-        }
-        
-        message += fmt.Sprintf("Прошло %s с момента выполнения дневной нормы.\n", normPeriod)
-        message += fmt.Sprintf("И %s с твоей последней тренировки.\n", workoutPeriod)
     }
 
-    message += fmt.Sprintf("Тебе осталось выполнить %d отжиманий до дневной нормы (%d всего). 💪🚀", 
-        remaining, dailyNorm)
+    message += fmt.Sprintf("Тебе %s выполнить %d отжиманий до дневной нормы (%d всего). 💪🚀", 
+        word, remaining, dailyNorm)
     message += "\n\nИспользуй кнопку \"➕ Добавить отжимания\""
-    
+
     return message
 }
+
+
+func formatPeriod(days, hours int) string {
+    if days > 0 && hours > 0 {
+        return fmt.Sprintf("%s и %s", 
+            FormatDaysCompact(days), 
+            FormatHoursCompact(hours))
+    } else if days > 0 {
+        return FormatDaysCompact(days)
+    } else if hours > 0 {
+        return FormatHoursCompact(hours)
+    }
+    return "менее часа"
+}
+
+
 
 // Проверяем, доступен ли чат с пользователем
 func (rs *ReminderService) isChatAvailable(userID int64) bool {
@@ -191,4 +189,3 @@ func (rs *ReminderService) disableNotificationsForUnavailableUser(ctx context.Co
 		log.Printf("Напоминания отключены для недоступного пользователя %d", userID)
 	}
 }
-

@@ -1,0 +1,44 @@
+services:
+  postgres:
+    image: postgres:14
+    container_name: pushup-db
+    environment:
+      POSTGRES_USER: ${DB_USER:-pushup_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME:-pushup_tracker}
+      POSTGRES_HOST_AUTH_METHOD: md5
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./database/data:/var/lib/postgresql/data
+      - ./database/init-scripts:/docker-entrypoint-initdb.d
+    networks:
+      - pushup-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-pushup_user} -d ${DB_NAME:-pushup_tracker}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  bot:
+    build: ./backend
+    container_name: pushup-bot
+    environment:
+      - BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./cache:/app/cache
+    networks:
+      - pushup-network
+    restart: unless-stopped
+
+networks:
+  pushup-network:
+    driver: bridge
