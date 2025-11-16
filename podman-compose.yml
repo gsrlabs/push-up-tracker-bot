@@ -23,7 +23,6 @@ services:
   bot:
     build: ./backend
     container_name: pushup-bot
-    dockerfile: Containerfile
     environment:
       - BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - DB_HOST=postgres
