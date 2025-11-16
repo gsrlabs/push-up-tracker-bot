@@ -1,18 +1,17 @@
 #!/bin/bash
-
 # Конфигурация
 BACKUP_DIR="./backups/db"
 DB_NAME="pushup_tracker"
-CONTAINER_NAME="pushup-db"
 DB_USER="pushup_user"
+CONTAINER_NAME="pushup-db"
+BOT_SERVICE="bot"
 
-# Цвета для вывода
+# Цвета
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Функции для цветного вывода
 error() { echo -e "${RED}❌ $1${NC}"; }
 success() { echo -e "${GREEN}✅ $1${NC}"; }
 warning() { echo -e "${YELLOW}⚠️ $1${NC}"; }
@@ -20,148 +19,98 @@ info() { echo -e "🔹 $1"; }
 
 # Проверка аргументов
 if [ -z "$1" ]; then
-    error "Укажите файл бекапа для восстановления"
+    error "Укажите файл бекапа"
     echo "Использование: $0 <backup_file.gz>"
     echo ""
     info "Доступные бекапы:"
-    find $BACKUP_DIR -name "*.gz" -type f -printf "%Tb %Td %TY %TH:%TM | %p\n" 2>/dev/null | sort -r
+    find "$BACKUP_DIR" -name "*.gz" -type f -printf "%Tb %Td %TY %TH:%TM | %f\n" 2>/dev/null | sort -r
     echo ""
-    info "Пример: $0 backups/db/pushup_tracker_20241215_143022.sql.gz"
-    info "Или: $0 pushup_tracker_20241215_143022.sql.gz (если файл в backups/db/)"
+    info "Пример: $0 pushup_tracker_20251116_114800.sql.gz"
     exit 1
 fi
 
-BACKUP_FILE=$1
+BACKUP_FILE="$1"
+[[ "$BACKUP_FILE" != *"/"* ]] && BACKUP_FILE="$BACKUP_DIR/$BACKUP_FILE"
 
-# Если указано только имя файла, добавляем путь
-if [[ "$BACKUP_FILE" != *"/"* ]]; then
-    BACKUP_FILE="$BACKUP_DIR/$BACKUP_FILE"
-fi
-
-# Проверка существования файла
+# Проверка файла
 if [ ! -f "$BACKUP_FILE" ]; then
-    error "Файл бекапа не найден: $BACKUP_FILE"
-    
-    # Предлагаем похожие файлы
+    error "Файл не найден: $BACKUP_FILE"
     BASENAME=$(basename "$BACKUP_FILE" .gz)
-    if find $BACKUP_DIR -name "${BASENAME}*" | grep -q .; then
+    if find "$BACKUP_DIR" -name "${BASENAME}*" | grep -q .; then
         info "Возможно вы имели в виду:"
-        find $BACKUP_DIR -name "${BASENAME}*" -type f | sort -r
-    else
-        info "Доступные бекапы:"
-        find $BACKUP_DIR -name "*.gz" -type f -printf "%Tb %Td %TY %TH:%TM | %p\n" 2>/dev/null | sort -r | head -10
+        find "$BACKUP_DIR" -name "${BASENAME}*" -type f | sort -r
     fi
     exit 1
 fi
 
-# Проверка целостности бекапа
-info "Проверка целостности бекапа..."
+# Проверка целостности
+info "Проверка бекапа..."
 if ! gzip -t "$BACKUP_FILE" 2>/dev/null; then
-    error "Бекап поврежден или имеет неверный формат"
+    error "Бекап повреждён"
     exit 1
 fi
-success "Бекап прошел проверку целостности"
+success "Бекап в порядке"
 
-# Проверка что контейнер БД запущен
-if ! docker ps --format "table {{.Names}}" | grep -q "$CONTAINER_NAME"; then
-    error "Контейнер БД $CONTAINER_NAME не запущен"
-    info "Запустите: docker-compose up -d postgres"
+# Проверка контейнера
+if ! podman ps --format "table {{.Names}}" | grep -q "^$CONTAINER_NAME$"; then
+    error "Контейнер $CONTAINER_NAME не запущен"
+    info "Запустите: podman-compose up -d postgres"
     exit 1
 fi
 
-# Предупреждение о потере данных
+# Подтверждение
 echo ""
-warning "╔══════════════════════════════════════════════════╗"
-warning "║               ВНИМАНИЕ! ОПАСНО!                 ║"
-warning "║    Это перезапишет текущую базу данных!         ║"
-warning "║     Все текущие данные будут потеряны!          ║"
-warning "╚══════════════════════════════════════════════════╝"
+warning "╔════════════════════════════════════╗"
+warning "║ ВНИМАНИЕ! ДАННЫЕ БУДУТ УДАЛЕНЫ!    ║"
+warning "╚════════════════════════════════════╝"
 echo ""
-read -p "Вы уверены, что хотите продолжить? (y/N): " -n 1 -r
+read -p "Продолжить? (y/N): " -n 1 -r
 echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    info "Восстановление отменено"
-    exit 0
-fi
+[[ ! $REPLY =~ ^[Yy]$ ]] && { info "Отменено"; exit 0; }
 
-info "Начинаем восстановление из: $BACKUP_FILE"
-
-# Останавливаем бота чтобы избежать конфликтов
+# Остановка бота
 info "Останавливаем бота..."
-if docker-compose stop bot 2>/dev/null; then
-    success "Бот остановлен"
-else
-    warning "Не удалось остановить бота (возможно не запущен)"
-fi
+podman-compose stop "$BOT_SERVICE" > /dev/null && success "Бот остановлен" || warning "Бот не запущен"
 
-# Дропаем и создаем базу заново (чистое восстановление)
-info "Подготовка базы данных..."
-if ! docker exec $CONTAINER_NAME psql -U $DB_USER -d postgres -c "DROP DATABASE IF EXISTS $DB_NAME;" 2>/dev/null; then
-    error "Не удалось удалить старую базу данных"
-    docker-compose start bot 2>/dev/null || true
-    exit 1
-fi
+# Пересоздание БД
+info "Подготовка БД..."
+podman exec "$CONTAINER_NAME" psql -U "$DB_USER" -d postgres -c "DROP DATABASE IF EXISTS $DB_NAME;" > /dev/null
+podman exec "$CONTAINER_NAME" psql -U "$DB_USER" -d postgres -c "CREATE DATABASE $DB_NAME;" > /dev/null
+success "База пересоздана"
 
-if ! docker exec $CONTAINER_NAME psql -U $DB_USER -d postgres -c "CREATE DATABASE $DB_NAME;" 2>/dev/null; then
-    error "Не удалось создать новую базу данных"
-    docker-compose start bot 2>/dev/null || true
-    exit 1
-fi
-success "База данных подготовлена"
-
-# Восстанавливаем базу
+# Восстановление
 info "Восстановление данных..."
 START_TIME=$(date +%s)
+if gunzip -c "$BACKUP_FILE" | podman exec -i "$CONTAINER_NAME" psql -U "$DB_USER" -d "$DB_NAME" > /dev/null; then
+    DURATION=$(( $(date +%s) - START_TIME ))
+    success "Восстановлено за ${DURATION}с"
 
-if gunzip -c "$BACKUP_FILE" | docker exec -i $CONTAINER_NAME psql -U $DB_USER -d $DB_NAME 2>/dev/null; then
-    END_TIME=$(date +%s)
-    DURATION=$((END_TIME - START_TIME))
-    success "База успешно восстановлена за ${DURATION} секунд"
-    
-    # Проверяем что данные загрузились
-    TABLE_COUNT=$(docker exec $CONTAINER_NAME psql -U $DB_USER -d $DB_NAME -t -c "SELECT count(*) FROM information_schema.tables WHERE table_schema='public';" 2>/dev/null | tr -d ' \n')
-    if [ -n "$TABLE_COUNT" ] && [ "$TABLE_COUNT" -gt 0 ]; then
-        success "Загружено таблиц: $TABLE_COUNT"
-        
-        # Дополнительная проверка - считаем пользователей
-        USER_COUNT=$(docker exec $CONTAINER_NAME psql -U $DB_USER -d $DB_NAME -t -c "SELECT count(*) FROM users;" 2>/dev/null | tr -d ' \n')
-        if [ -n "$USER_COUNT" ]; then
-            success "Загружено пользователей: $USER_COUNT"
-        fi
-    else
-        warning "Не удалось проверить количество таблиц"
-    fi
+    # Проверка
+    TABLE_COUNT=$(podman exec "$CONTAINER_NAME" psql -U "$DB_USER" -d "$DB_NAME" -t -c "SELECT count(*) FROM information_schema.tables WHERE table_schema='public';" | tr -d ' \n')
+    [ -n "$TABLE_COUNT" ] && [ "$TABLE_COUNT" -gt 0 ] && success "Таблиц: $TABLE_COUNT"
+
+    USER_COUNT=$(podman exec "$CONTAINER_NAME" psql -U "$DB_USER" -d "$DB_NAME" -t -c "SELECT count(*) FROM users;" 2>/dev/null | tr -d ' \n')
+    [ -n "$USER_COUNT" ] && success "Пользователей: $USER_COUNT"
 else
-    error "Ошибка восстановления базы"
-    
-    # Пытаемся запустить бота обратно
-    warning "Пытаемся запустить бота..."
-    docker-compose start bot 2>/dev/null || true
+    error "Ошибка восстановления"
+    podman-compose start "$BOT_SERVICE" > /dev/null 2>&1
     exit 1
 fi
 
-# Запускаем бота обратно
+# Запуск бота
 info "Запускаем бота..."
-if docker-compose start bot 2>/dev/null || docker-compose up -d bot 2>/dev/null; then
-    success "Бот перезапущен"
-else
-    error "Не удалось запустить бота"
-    info "Запустите вручную: docker-compose up -d bot"
-fi
+podman-compose up -d "$BOT_SERVICE" > /dev/null && success "Бот запущен" || error "Не удалось запустить бота"
 
-# Финальная информация
+# Финал
 echo ""
-success "╔══════════════════════════════════════════════════╗"
-success "║           ВОССТАНОВЛЕНИЕ ЗАВЕРШЕНО!             ║"
-success "╚══════════════════════════════════════════════════╝"
+success "╔══════════════════════════╗"
+success "║ ВОССТАНОВЛЕНИЕ ЗАВЕРШЕНО ║"
+success "╚══════════════════════════╝"
 echo ""
 info "📁 Файл: $(basename "$BACKUP_FILE")"
 info "📏 Размер: $(du -h "$BACKUP_FILE" | cut -f1)"
-info "📅 Дата создания: $(stat -c %y "$BACKUP_FILE" 2>/dev/null | cut -d'.' -f1 || echo "неизвестно")"
-info "⏱️  Время восстановления: ${DURATION} секунд"
-info "🗃️  Таблиц в БД: $TABLE_COUNT"
-if [ -n "$USER_COUNT" ]; then
-    info "👥 Пользователей: $USER_COUNT"
-fi
+info "⏱️ Время: ${DURATION}с"
+info "🗃️ Таблиц: $TABLE_COUNT"
+[ -n "$USER_COUNT" ] && info "👥 Пользователей: $USER_COUNT"
 echo ""
-info "🌐 Бот должен быть доступен через несколько секунд"
+info "🌐 Бот будет готов через несколько секунд"

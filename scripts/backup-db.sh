@@ -1,26 +1,29 @@
 #!/bin/bash
-
 # Конфигурация
 BACKUP_DIR="./backups/db"
 DATE=$(date +%Y%m%d_%H%M%S)
 DB_NAME="pushup_tracker"
-BINARY_NAME="trackerbot"
+DB_USER="pushup_user"
+CONTAINER_NAME="pushup-db"
 
-# Создаем директории
-mkdir -p $BACKUP_DIR
-mkdir -p $BINARY_BACKUP_DIR
+# Создаём директорию
+mkdir -p "$BACKUP_DIR"
 
 echo "🔄 Создание бекапа..."
 
-# 1. Бекап базы данных
+# 1. Бекап БД через pg_dump
 echo "📦 Бекап базы данных..."
-docker-compose exec -T postgres pg_dump -U pushup_user -d $DB_NAME > $BACKUP_DIR/${DB_NAME}_${DATE}.sql
-
-# Сжимаем бекап БД
-gzip $BACKUP_DIR/${DB_NAME}_${DATE}.sql
-echo "✅ Бекап БД создан: $BACKUP_DIR/${DB_NAME}_${DATE}.sql.gz"
+if podman exec "$CONTAINER_NAME" pg_dump -U "$DB_USER" -d "$DB_NAME" > "$BACKUP_DIR/${DB_NAME}_${DATE}.sql"; then
+    # Сжимаем
+    gzip "$BACKUP_DIR/${DB_NAME}_${DATE}.sql"
+    echo "✅ Бекап БД создан: $BACKUP_DIR/${DB_NAME}_${DATE}.sql.gz"
+else
+    echo "❌ Ошибка при создании бекапа"
+    exit 1
+fi
 
 # Статистика
 echo ""
 echo "📊 Бекап создан:"
-echo "   🗄️  База данных: $BACKUP_DIR/${DB_NAME}_${DATE}.sql.gz"
+echo " 🗄️ База данных: $BACKUP_DIR/${DB_NAME}_${DATE}.sql.gz"
+echo " 📏 Размер: $(du -h "$BACKUP_DIR/${DB_NAME}_${DATE}.sql.gz" | cut -f1)"

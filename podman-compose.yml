@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:14
+    image: docker.io/library/postgres:14
     container_name: pushup-db
     environment:
       POSTGRES_USER: ${DB_USER:-pushup_user}
@@ -10,12 +10,12 @@ services:
     ports:
       - "5433:5432"
     volumes:
-      - ./database/data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data          # ← named volume
       - ./database/init-scripts:/docker-entrypoint-initdb.d
     networks:
       - pushup-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-pushup_user} -d ${DB_NAME:-pushup_tracker}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-pushup_user} -d ${DB_NAME:-pushup_tracker} || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -42,3 +42,5 @@ services:
 networks:
   pushup-network:
     driver: bridge
+volumes:
+  postgres_data:
