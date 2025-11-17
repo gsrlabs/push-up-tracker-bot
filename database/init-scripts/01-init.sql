@@ -7,7 +7,7 @@ CREATE TABLE users (
     notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE,
     last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_updated_max_reps TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_notifications TIMESTAMP DEFAULT NULL
+    last_notification TIMESTAMP DEFAULT NULL
 );
 
 -- Таблица ежедневной статистики
