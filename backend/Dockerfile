@@ -23,7 +23,7 @@ WORKDIR /app
 RUN apk add --no-cache ca-certificates
 
 # Копируем бинарник
-COPY --from=builder /app/trackerbot .
+COPY --from=builder /app/trackerbot ./
 
 # Запускаем приложение
 CMD ["./trackerbot"]

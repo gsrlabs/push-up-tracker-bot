@@ -8,9 +8,9 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Конфигурация
-COMPOSE="podman-compose"
+COMPOSE="docker compose"
 BOT="bot"
-DB="pushup-db"
+DB="postgres"
 NETWORK="pushup-network"
 
 # Функции
@@ -57,7 +57,7 @@ show_help() {
     echo -e "  ${YELLOW}run.sh db${NC}             — Подключиться к БД (psql)"
     echo -e "  ${YELLOW}run.sh down-clean${NC}     — УДАЛИТЬ volume (ОСТОРОЖНО!)"
     echo ""
-    info "Пример: ./run.sh start"
+    info "Пример: ./scripts/run.sh start"
     echo ""
 }
 
@@ -74,7 +74,7 @@ case "$1" in
 
     "stop")
         echo "Остановка контейнеров (volume сохранён)..."
-        $COMPOSE down
+        $COMPOSE stop
         success "Контейнеры остановлены"
         ;;
 
@@ -152,11 +152,11 @@ case "$1" in
         
      "db")
         echo "Подключение к базе данных..."
-        if podman ps --format "table {{.Names}}" | grep -q "^$DB$"; then
-            podman exec -it "$DB" psql -U pushup_user -d pushup_tracker
+        if docker ps --format "table {{.Names}}" | grep -q "$DB"; then
+            $COMPOSE exec "$DB" psql -U pushup_user -d pushup_tracker
         else
             error "Контейнер БД ($DB) не запущен!"
-            info "Запустите: ./run.sh start-db"
+            info "Запустите: ./scripts/run.sh start-db"
             exit 1
         fi
         ;;
@@ -164,6 +164,7 @@ case "$1" in
     # === ОПАСНАЯ КОМАНДА ===
     "down-clean")
         warning "ВНИМАНИЕ! Это УДАЛИТ ВСЕ ДАННЫЕ (volume)!"
+        warning "Все пользователи и статистика будут потеряны!"
         read -p "Введите 'YES' для подтверждения: " confirm
         if [[ "$confirm" == "YES" ]]; then
             echo "Удаление volume..."
