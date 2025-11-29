@@ -10,12 +10,12 @@ services:
     ports:
       - "5433:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ./database/data:/var/lib/postgresql/data
       - ./database/init-scripts:/docker-entrypoint-initdb.d
     networks:
       - pushup-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-pushup_user} -d ${DB_NAME:-pushup_tracker} || exit 1"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-pushup_user} -d ${DB_NAME:-pushup_tracker}"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -42,5 +42,4 @@ services:
 networks:
   pushup-network:
     driver: bridge
-volumes:
-  postgres_data:
+
