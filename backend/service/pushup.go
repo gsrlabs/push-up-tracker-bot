@@ -31,7 +31,7 @@ func (s *PushupService) EnsureUser(ctx context.Context, userID int64, username s
 
 func (s *PushupService) AddPushups(ctx context.Context, userID int64, username string, count int) (*AddPushupsResult, error) {
 
-	today := time.Now().UTC().Truncate(24 * time.Hour)
+	today := time.Now().Truncate(24 * time.Hour)
 
 	dailyNorm, err := s.repo.GetDailyNorm(ctx, userID)
 	if err != nil {
@@ -97,7 +97,7 @@ func (s *PushupService) GetTodayStat(ctx context.Context, userID int64) (int, er
 		return cached, nil
 	}
 
-	today := time.Now().UTC().Truncate(24 * time.Hour)
+	today := time.Now().Truncate(24 * time.Hour)
 	total, err := s.repo.GetTodayStat(ctx, userID, today)
 	if err != nil {
 		return 0, fmt.Errorf("ошибка получения статистики: %w", err)
@@ -142,7 +142,7 @@ func (s *PushupService) GetFirstWorkoutDate(ctx context.Context, userID int64) (
 
 // CheckNormCompletion проверяет, выполнил ли кто-то дневную норму
 func (s *PushupService) CheckNormCompletion(ctx context.Context, dailyNorm int) (bool, string) {
-	today := time.Now().UTC().Truncate(24 * time.Hour)
+	today := time.Now().Truncate(24 * time.Hour)
 	userID, err := s.repo.GetFirstNormCompleter(ctx, today)
 
 	if err != nil || userID == 0 {

@@ -111,14 +111,14 @@ func (r *PushupRepository) GetUsername(ctx context.Context, userID int64) (strin
 
 // SetMaxReps теперь обновляет и timestamp
 func (r *PushupRepository) SetMaxReps(ctx context.Context, userID int64, count int) error {
-    query := `UPDATE users SET max_reps = $1, last_updated_max_reps = CURRENT_TIMESTAMP WHERE user_id = $2`
+    query := `UPDATE users SET max_reps = $1, last_updated_max_reps = CURRENT_TIMESTAMP AT TIME ZONE 'UTC' WHERE user_id = $2`
     _, err := r.pool.Exec(ctx, query, count, userID)
     return err
 }
 
 // SetDateCompletionOfDailyNorm установка даты выполнения дневной нормы
 func (r *PushupRepository) SetDateCompletionOfDailyNorm(ctx context.Context, userID int64) error {
-    query := `UPDATE users SET last_updated = CURRENT_TIMESTAMP, last_notifications = NULL WHERE user_id = $1`
+    query := `UPDATE users SET last_updated = CURRENT_TIMESTAMP AT TIME ZONE 'UTC', last_notifications = NULL WHERE user_id = $1`
     _, err := r.pool.Exec(ctx, query, userID)
     return err
 }
@@ -279,9 +279,8 @@ func (r *PushupRepository) GetMaxRepsRecord(ctx context.Context, userID int64) (
 }
 
 
-// Добавляем методы для работы с уведомлениями
 func (r *PushupRepository) UpdateLastNotification(ctx context.Context, userID int64) error {
-    query := `UPDATE users SET last_notification = CURRENT_TIMESTAMP WHERE user_id = $1`
+    query := `UPDATE users SET last_notification = CURRENT_TIMESTAMP AT TIME ZONE 'UTC' WHERE user_id = $1`
     _, err := r.pool.Exec(ctx, query, userID)
     return err
 }
@@ -299,8 +298,8 @@ func (r *PushupRepository) GetUsersForReminder(ctx context.Context) ([]int64, er
         HAVING COALESCE(SUM(p.count), 0) < u.daily_norm
       )
       AND (u.last_notification IS NULL 
-           OR u.last_notification <= CURRENT_TIMESTAMP - INTERVAL '24 hours')
-      AND u.last_updated <= CURRENT_TIMESTAMP - INTERVAL '48 hours'
+           OR u.last_notification <= (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - INTERVAL '24 hours')
+      AND u.last_updated <= (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - INTERVAL '48 hours'
     ORDER BY u.user_id`
 
     rows, err := r.pool.Query(ctx, query)
