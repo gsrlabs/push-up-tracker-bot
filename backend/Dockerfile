@@ -1,5 +1,5 @@
 # ---- Стадия сборки ----
-FROM docker.io/library/golang:1.25 AS builder
+FROM docker.io/library/golang:1.25.3 AS builder
 
 # Рабочая директория внутри контейнера
 WORKDIR /app

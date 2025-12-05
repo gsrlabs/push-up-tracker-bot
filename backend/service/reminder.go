@@ -27,24 +27,55 @@ func (rs *ReminderService) StartReminderChecker() {
 }
 
 func (rs *ReminderService) checkReminders() {
-	// Проверяем каждые час
+	// Запускаем первую проверку точно в следующий час
+	go rs.waitForNextHourAndStart()
+}
+
+func (rs *ReminderService) waitForNextHourAndStart() {
+	// Вычисляем время до следующего часа
+	now := time.Now()
+	nextHour := time.Date(
+		now.Year(), now.Month(), now.Day(),
+		now.Hour()+1, 0, 0, 0, now.Location(),
+	)
+	initialDelay := nextHour.Sub(now)
+
+	log.Printf("Первая проверка напоминаний через %v (в %s)",
+		initialDelay.Round(time.Second), nextHour.Format("15:04"))
+
+	time.Sleep(initialDelay)
+
+	// Запускаем первую проверку и потом тикер
+	rs.runReminderCheck()
+
 	ticker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		ctx := context.Background()
+		rs.runReminderCheck()
+	}
+}
 
-		// Получаем всех пользователей, которые не тренировались более 2 дней
-		inactiveUsers, err := rs.pushupService.GetUsersForReminder(ctx)
-		if err != nil {
-			log.Printf("Ошибка получения неактивных пользователей: %v", err)
-			continue
-		}
+func (rs *ReminderService) runReminderCheck() {
+	ctx := context.Background()
+	now := time.Now()
 
-		// Отправляем напоминания
+	inactiveUsers, err := rs.pushupService.GetUsersForReminder(ctx)
+	if err != nil {
+		log.Printf("Ошибка получения неактивных пользователей: %v", err)
+		return
+	}
+
+	if len(inactiveUsers) > 0 {
+		log.Printf("⏰ [%s] Отправка напоминаний для %d пользователей",
+			now.Format("15:04"), len(inactiveUsers))
+
 		for _, userID := range inactiveUsers {
-			rs.sendReminder(ctx, userID)
+			go rs.sendReminder(ctx, userID)
 		}
+	} else {
+		log.Printf("✅ [%s] Пользователей для напоминаний не найдено",
+			now.Format("15:04"))
 	}
 }
 
@@ -115,55 +146,52 @@ func (rs *ReminderService) sendReminder(ctx context.Context, userID int64) {
 }
 
 func (rs *ReminderService) buildReminderMessage(remaining, dailyNorm, hoursWithoutDailyNorm, hoursWithoutWorkout int, lastWorkoutDate time.Time) string {
-    message := "⏰ Напоминание о тренировке!\n\n"
-    word := "осталось"
+	message := "⏰ Напоминание о тренировке!\n\n"
+	word := "осталось"
 
-    var zeroTime time.Time
-    if lastWorkoutDate.Equal(zeroTime) || lastWorkoutDate.IsZero() {
-        message += "Ты ещё не начинал тренироваться! 💥\n"
-        word = "необходимо"
-    } else {
-        // Разбиваем на дни и часы
-        daysWithoutNorm := hoursWithoutDailyNorm / 24
-        hoursWithoutNorm := hoursWithoutDailyNorm % 24
+	var zeroTime time.Time
+	if lastWorkoutDate.Equal(zeroTime) || lastWorkoutDate.IsZero() {
+		message += "Ты ещё не начинал тренироваться! 💥\n"
+		word = "необходимо"
+	} else {
+		// Разбиваем на дни и часы
+		daysWithoutNorm := hoursWithoutDailyNorm / 24
+		hoursWithoutNorm := hoursWithoutDailyNorm % 24
 
-        daysWithoutWorkout := hoursWithoutWorkout / 24
-        hoursRemainingWorkout := hoursWithoutWorkout % 24
+		daysWithoutWorkout := hoursWithoutWorkout / 24
+		hoursRemainingWorkout := hoursWithoutWorkout % 24
 
-        // Форматируем периоды
-        normPeriod := formatPeriod(daysWithoutNorm, hoursWithoutNorm)
-        workoutPeriod := formatPeriod(daysWithoutWorkout, hoursRemainingWorkout)
+		// Форматируем периоды
+		normPeriod := formatPeriod(daysWithoutNorm, hoursWithoutNorm)
+		workoutPeriod := formatPeriod(daysWithoutWorkout, hoursRemainingWorkout)
 
-        if hoursWithoutDailyNorm == hoursWithoutWorkout {
-            message += fmt.Sprintf("Прошло %s с твоей последней тренировки.\n", workoutPeriod)
-        } else {
-            message += fmt.Sprintf("Прошло %s с момента выполнения дневной нормы.\n", normPeriod)
-            message += fmt.Sprintf("А так же %s с твоей последней тренировки.\n", workoutPeriod)
-        }
-    }
+		if hoursWithoutDailyNorm == hoursWithoutWorkout {
+			message += fmt.Sprintf("Прошло %s с твоей последней тренировки.\n", workoutPeriod)
+		} else {
+			message += fmt.Sprintf("Прошло %s с момента выполнения дневной нормы.\n", normPeriod)
+			message += fmt.Sprintf("А так же %s с твоей последней тренировки.\n", workoutPeriod)
+		}
+	}
 
-    message += fmt.Sprintf("Тебе %s выполнить %d отжиманий до дневной нормы (%d всего). 💪🚀", 
-        word, remaining, dailyNorm)
-    message += "\n\nИспользуй кнопку \"➕ Добавить отжимания\""
+	message += fmt.Sprintf("Тебе %s выполнить %d отжиманий до дневной нормы (%d всего). 💪🚀",
+		word, remaining, dailyNorm)
+	message += "\n\nИспользуй кнопку \"➕ Добавить отжимания\""
 
-    return message
+	return message
 }
-
 
 func formatPeriod(days, hours int) string {
-    if days > 0 && hours > 0 {
-        return fmt.Sprintf("%s и %s", 
-            FormatDaysCompact(days), 
-            FormatHoursCompact(hours))
-    } else if days > 0 {
-        return FormatDaysCompact(days)
-    } else if hours > 0 {
-        return FormatHoursCompact(hours)
-    }
-    return "менее часа"
+	if days > 0 && hours > 0 {
+		return fmt.Sprintf("%s и %s",
+			FormatDaysCompact(days),
+			FormatHoursCompact(hours))
+	} else if days > 0 {
+		return FormatDaysCompact(days)
+	} else if hours > 0 {
+		return FormatHoursCompact(hours)
+	}
+	return "менее часа"
 }
-
-
 
 // Проверяем, доступен ли чат с пользователем
 func (rs *ReminderService) isChatAvailable(userID int64) bool {
