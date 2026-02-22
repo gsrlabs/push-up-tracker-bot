@@ -4,10 +4,10 @@ services:
     container_name: pushup-db
     restart: unless-stopped
     environment:
-      TZ: ${TIME_ZONE:-Europe/Moscow}
       POSTGRES_USER: ${DB_USER:-pushup_user}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME:-pushup_tracker}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      TZ: ${TIME_ZONE:-Europe/Moscow}
 
     #ports:
       #- "127.0.0.1:5432:5432"
@@ -28,8 +28,8 @@ services:
     restart: unless-stopped
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - DB_NAME=${DB_NAME}
       - DB_USER=${DB_USER}
+      - DB_NAME=${DB_NAME}
       - DB_PASSWORD=${DB_PASSWORD}
     depends_on:
       postgres:

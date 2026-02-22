@@ -60,12 +60,10 @@ func Load(path string) (*Config, error) {
 
 	_ = v.BindEnv("bot.token", "TELEGRAM_BOT_TOKEN")
 	_ = v.BindEnv("database.password", "DB_PASSWORD")
-
-	_ = v.BindEnv("database.host", "DB_HOST")
-	_ = v.BindEnv("database.port", "DB_PORT")
 	_ = v.BindEnv("database.user", "DB_USER")
 	_ = v.BindEnv("database.name", "DB_NAME")
 	_ = v.BindEnv("app.timezone", "TIME_ZONE")
+
 
 	if err := v.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)

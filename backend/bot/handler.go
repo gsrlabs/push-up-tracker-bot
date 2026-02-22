@@ -553,7 +553,7 @@ func (h *BotHandler) handleSetCustomNorm(ctx context.Context, userID int64, chat
 		return
 	}
 	msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("✅ Дневная норма установлена: %d", dailyNorm))
-	//msg.ReplyMarkup = ui.MainKeyboard(notEnable)
+	msg.ReplyMarkup = ui.MainKeyboard()
 	h.bot.Send(msg)
 }
 
@@ -623,7 +623,7 @@ func (h *BotHandler) handleProgressHistory(ctx context.Context, userID int64, ch
 
 	if len(history) == 0 {
 		msg := tgbotapi.NewMessage(chatID, "📊 История прогресса пуста.\nИспользуй \"🎯 Обновить прогресс\" что бы начать историю прогресса!")
-		//msg.ReplyMarkup = ui.MainKeyboard(notEnable)
+		msg.ReplyMarkup = ui.MainKeyboard()
 		h.bot.Send(msg)
 		return
 	}
@@ -655,7 +655,7 @@ func (h *BotHandler) handleProgressHistory(ctx context.Context, userID int64, ch
 	}
 
 	msg := tgbotapi.NewMessage(chatID, response.String())
-	//msg.ReplyMarkup = ui.MainKeyboard(notEnable)
+	msg.ReplyMarkup = ui.MainKeyboard()
 	h.bot.Send(msg)
 
 	err = service.SendSchedule(h.bot, chatID, history)
