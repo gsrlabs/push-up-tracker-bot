@@ -157,29 +157,7 @@ func (s *PushupService) CheckNormCompletion(ctx context.Context, dailyNorm int) 
 	return true, username
 }
 
-
-// Добавляем методы для управления напоминаниями в сервисе
-func (s *PushupService) DisableNotifications(ctx context.Context, userID int64) error {
-	return s.repo.DisableNotifications(ctx, userID)
-}
-
-func (s *PushupService) EnableNotifications(ctx context.Context, userID int64) error {
-	return s.repo.EnableNotifications(ctx, userID)
-}
-
-func (s *PushupService) GetNotificationsStatus(ctx context.Context, userID int64) (bool, error) {
-	return s.repo.GetNotificationsStatus(ctx, userID)
-}
-
 func (s *PushupService) DebugCache() *cache.TodayCache {
 	return s.cache
 }
 
-
-func (s *PushupService) UpdateLastNotification(ctx context.Context, userID int64) error {
-    return s.repo.UpdateLastNotification(ctx, userID)
-}
-
-func (s *PushupService) GetUsersForReminder(ctx context.Context) ([]int64, error) {
-    return s.repo.GetUsersForReminder(ctx)
-}

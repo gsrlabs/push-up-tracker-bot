@@ -2,7 +2,9 @@ services:
   postgres:
     image: docker.io/library/postgres:14
     container_name: pushup-db
+    restart: unless-stopped
     environment:
+      TZ: Europe/Moscow
       POSTGRES_USER: ${DB_USER:-pushup_user}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME:-pushup_tracker}
@@ -23,6 +25,7 @@ services:
   bot:
     build: ./backend
     container_name: pushup-bot
+    restart: unless-stopped
     environment:
       - BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - DB_HOST=postgres
@@ -37,7 +40,6 @@ services:
       - ./cache:/app/cache
     networks:
       - pushup-network
-    restart: unless-stopped
 
 networks:
   pushup-network:

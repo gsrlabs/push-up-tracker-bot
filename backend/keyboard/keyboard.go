@@ -3,7 +3,7 @@ package keyboard
 import tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
 // MainKeyboard - основная клавиатура с двумя кнопками
-func MainKeyboard(notificationsEnabled bool) tgbotapi.ReplyKeyboardMarkup {
+func MainKeyboard() tgbotapi.ReplyKeyboardMarkup {
 	return tgbotapi.NewReplyKeyboard(
 		tgbotapi.NewKeyboardButtonRow(
 			tgbotapi.NewKeyboardButton("➕ Добавить отжимания"),
@@ -15,14 +15,8 @@ func MainKeyboard(notificationsEnabled bool) tgbotapi.ReplyKeyboardMarkup {
 }
 
 // SettingsKeyboard - клавиатура с дополнительными функциями
-func SettingsKeyboard(notificationsEnabled bool) tgbotapi.ReplyKeyboardMarkup {
-	var notificationButton tgbotapi.KeyboardButton
-	if notificationsEnabled {
-		notificationButton = tgbotapi.NewKeyboardButton("🔕 Отключить напоминания")
-	} else {
-		notificationButton = tgbotapi.NewKeyboardButton("🔔 Включить напоминания")
-	}
-	
+func SettingsKeyboard() tgbotapi.ReplyKeyboardMarkup {
+
 	return tgbotapi.NewReplyKeyboard(
         // Первый ряд - основные настройки
         tgbotapi.NewKeyboardButtonRow(
@@ -35,7 +29,6 @@ func SettingsKeyboard(notificationsEnabled bool) tgbotapi.ReplyKeyboardMarkup {
         ),
         // Третий ряд - дополнительные функции
         tgbotapi.NewKeyboardButtonRow(
-			notificationButton,
             tgbotapi.NewKeyboardButton("📈 Мой прогресс"),
         ),
         // Четвертый ряд - управление уведомлениями

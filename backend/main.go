@@ -11,8 +11,7 @@ import (
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5" // Импортируем библиотеку для работы с Telegram API
 	"github.com/jackc/pgx/v5/pgxpool"
-	//"github.com/joho/godotenv" // Пакет для работы с переменными окружения если запускпть не через докер
-
+	
 	"trackerbot/bot"
 	"trackerbot/cache"
 	"trackerbot/repository"
@@ -114,14 +113,6 @@ func main() {
 
 	// Получение канала обновлений
 	updates := telegramBot.GetUpdatesChan(u)
-
-	reminderService := service.NewReminderService(pushupService, telegramBot)
-	reminderService.StartReminderChecker()
-
-	log.Println("Сервис напоминаний запущен")
-
-	progressReminderService := service.NewProgressReminderService(pushupService, telegramBot)
-	progressReminderService.StartProgressChecker()
 
 	log.Println("Сервис напоминаний о прогрессе запущен")
 

@@ -162,25 +162,7 @@ func (r *PushupRepository) GetDailyNorm(ctx context.Context, userID int64) (int,
 	return dailyNorm, err
 }
 
-// Добавляем методы для управления напоминаниями
-func (r *PushupRepository) DisableNotifications(ctx context.Context, userID int64) error {
-	query := `UPDATE users SET notifications_enabled = FALSE WHERE user_id = $1`
-	_, err := r.pool.Exec(ctx, query, userID)
-	return err
-}
 
-func (r *PushupRepository) EnableNotifications(ctx context.Context, userID int64) error {
-	query := `UPDATE users SET notifications_enabled = TRUE WHERE user_id = $1`
-	_, err := r.pool.Exec(ctx, query, userID)
-	return err
-}
-
-func (r *PushupRepository) GetNotificationsStatus(ctx context.Context, userID int64) (bool, error) {
-	query := `SELECT notifications_enabled FROM users WHERE user_id = $1`
-	var enabled bool
-	err := r.pool.QueryRow(ctx, query, userID).Scan(&enabled)
-	return enabled, err
-}
 
 // GetFirstWorkoutDate возвращает дату первой тренировки пользователя
 func (r *PushupRepository) GetFirstWorkoutDate(ctx context.Context, userID int64) (time.Time, error) {
@@ -220,7 +202,6 @@ func (r *PushupRepository) GetFirstNormCompleter(ctx context.Context, date time.
 	return userID, nil
 }
 
-// repository/repository.go
 
 // AddMaxRepsHistory добавляет запись об отжиманиях за подход в историю
 func (r *PushupRepository) AddMaxRepsHistory(ctx context.Context, userID int64, maxReps int) error {
@@ -278,43 +259,3 @@ func (r *PushupRepository) GetMaxRepsRecord(ctx context.Context, userID int64) (
 	return maxRepsRecord, nil
 }
 
-
-func (r *PushupRepository) UpdateLastNotification(ctx context.Context, userID int64) error {
-    query := `UPDATE users SET last_notification = CURRENT_TIMESTAMP AT TIME ZONE 'UTC' WHERE user_id = $1`
-    _, err := r.pool.Exec(ctx, query, userID)
-    return err
-}
-
-func (r *PushupRepository) GetUsersForReminder(ctx context.Context) ([]int64, error) {
-    query := `
-    SELECT u.user_id
-    FROM users u
-    WHERE u.notifications_enabled = TRUE
-      AND EXISTS (
-        SELECT 1 
-        FROM pushups p 
-        WHERE p.user_id = u.user_id 
-          AND p.date = CURRENT_DATE
-        HAVING COALESCE(SUM(p.count), 0) < u.daily_norm
-      )
-      AND (u.last_notification IS NULL 
-           OR u.last_notification <= (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - INTERVAL '24 hours')
-      AND u.last_updated <= (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - INTERVAL '48 hours'
-    ORDER BY u.user_id`
-
-    rows, err := r.pool.Query(ctx, query)
-    if err != nil {
-        return nil, err
-    }
-    defer rows.Close()
-
-    var userIDs []int64
-    for rows.Next() {
-        var userID int64
-        if err := rows.Scan(&userID); err != nil {
-            return nil, err
-        }
-        userIDs = append(userIDs, userID)
-    }
-    return userIDs, nil
-}

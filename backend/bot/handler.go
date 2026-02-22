@@ -61,9 +61,9 @@ func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
 			h.bot.Send(editMsg)
 
 			// Отправляем новое сообщение с главной клавиатурой
-			notificationsEnabled, _ := h.service.GetNotificationsStatus(context.Background(), update.CallbackQuery.From.ID)
+		
 			msg := tgbotapi.NewMessage(chatID, "Ввод отменен")
-			msg.ReplyMarkup = ui.MainKeyboard(notificationsEnabled)
+			msg.ReplyMarkup = ui.MainKeyboard()
 			h.bot.Send(msg)
 
 			return
@@ -88,20 +88,15 @@ func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
 		if count, err := strconv.Atoi(text); err == nil {
 			// Успех — очищаем ожидание и обрабатываем
 			h.clearPendingInput(chatID)
-			notificationsEnabled, err := h.service.GetNotificationsStatus(ctx, userID)
-			if err != nil {
-				log.Printf("Ошибка получения статуса уведомлений: %v", err)
-				notificationsEnabled = true
-
-			}
+			
 
 			switch input.inputType {
 			case perDayLimit:
-				h.handleAddPushups(ctx, userID, username, chatID, count, notificationsEnabled)
+				h.handleAddPushups(ctx, userID, username, chatID, count)
 			case inputTypeMaxReps:
-				h.handleSetMaxReps(ctx, userID, username, chatID, count, notificationsEnabled)
+				h.handleSetMaxReps(ctx, userID, username, chatID, count)
 			case inputTypeCustomNorm:
-				h.handleSetCustomNorm(ctx, userID, chatID, count, notificationsEnabled)
+				h.handleSetCustomNorm(ctx, userID, chatID, count)
 			}
 			return
 
@@ -125,13 +120,7 @@ func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
 		return
 	}
 
-	// Если ожидания ввода нет — обычная обработка кнопок/команд
-	notificationsEnabled, err := h.service.GetNotificationsStatus(ctx, userID)
-	if err != nil {
-		log.Printf("Ошибка получения статуса уведомлений: %v", err)
-		notificationsEnabled = true
-	}
-
+	
 	// Сброс дневной нормы и maxReps
 	if text == "/reset_norm" {
 		if err := h.service.ResetDailyNorm(ctx, userID); err != nil {
@@ -140,7 +129,7 @@ func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
 			return
 		}
 		msg := tgbotapi.NewMessage(chatID, "✅ Дневная норма сброшена до значения по умолчанию (40)")
-		msg.ReplyMarkup = ui.MainKeyboard(notificationsEnabled)
+		msg.ReplyMarkup = ui.MainKeyboard()
 		h.bot.Send(msg)
 		return
 	}
@@ -159,30 +148,9 @@ func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
 		return
 	}
 
-	// В switch в HandleUpdate добавляем:
-	if text == "/test_progress_reminder" {
-		if !h.adminIDs[userID] {
-			h.bot.Send(tgbotapi.NewMessage(chatID, "⛔ У тебя нет прав для этой команды"))
-			return
-		}
-
-		// Создаем тестовый сервис
-		testService := service.NewProgressReminderService(h.service, h.bot)
-
-		// Запускаем тест для текущего пользователя
-		go func() {
-			ctx := context.Background()
-			testService.TestReminderForUser(ctx, userID)
-		}()
-
-		msg := tgbotapi.NewMessage(chatID, "🔬 Тест напоминания запущен! Ожидай сообщение...")
-		h.bot.Send(msg)
-		return
-	}
-
 	switch text {
 	case "/start":
-		h.handleStart(ctx, chatID, userID, username, notificationsEnabled)
+		h.handleStart(ctx, chatID, userID, username)
 	case "➕ Добавить отжимания":
 		h.requestPushupCount(chatID, perDayLimit)
 	case "🎯 Тест максимальных отжиманий":
@@ -190,37 +158,33 @@ func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
 	case "📝 Установить норму":
 		h.requestCustomNorm(chatID)
 	case "📊 Статистика":
-		h.handleTodayStat(ctx, userID, chatID, notificationsEnabled)
-		h.handleTotalStat(ctx, userID, chatID, notificationsEnabled)
+		h.handleTodayStat(ctx, userID, chatID)
+		h.handleTotalStat(ctx, userID, chatID)
 		h.handleTodayLeaderboard(ctx, chatID)
-	case "🔕 Отключить напоминания":
-		h.handleToggleNotifications(ctx, userID, chatID, false)
-	case "🔔 Включить напоминания":
-		h.handleToggleNotifications(ctx, userID, chatID, true)
 	case "⚙️ Дополнительно":
 		msg := tgbotapi.NewMessage(chatID, "Выберите действие:")
-		msg.ReplyMarkup = ui.SettingsKeyboard(notificationsEnabled)
+		msg.ReplyMarkup = ui.SettingsKeyboard()
 		h.bot.Send(msg)
 	case "/info", "/help":
-		h.handleInfo(chatID, notificationsEnabled)
+		h.handleInfo(chatID)
 	case "📈 Мой прогресс":
-		h.handleProgressHistory(ctx, userID, chatID, notificationsEnabled)
+		h.handleProgressHistory(ctx, userID, chatID)
 	case "⬅️ Назад":
 		msg := tgbotapi.NewMessage(chatID, "Главное меню:")
-		msg.ReplyMarkup = ui.MainKeyboard(notificationsEnabled)
+		msg.ReplyMarkup = ui.MainKeyboard()
 		h.bot.Send(msg)
 	default:
 		// Если это неизвестная команда (начинается с '/')
 		if strings.HasPrefix(text, "/") {
 			msg := tgbotapi.NewMessage(chatID, "Неизвестная команда. Используйте меню.")
-			msg.ReplyMarkup = ui.MainKeyboard(notificationsEnabled)
+			msg.ReplyMarkup = ui.MainKeyboard()
 			h.bot.Send(msg)
 		}
 		// Обычный текст — игнорируем
 	}
 }
 
-func (h *BotHandler) handleAddPushups(ctx context.Context, userID int64, username string, chatID int64, count int, notEnable bool) {
+func (h *BotHandler) handleAddPushups(ctx context.Context, userID int64, username string, chatID int64, count int) {
 	if count <= 0 {
 		msg := tgbotapi.NewMessage(chatID, "Пожалуйста, введите положительное число:")
 		msg.ReplyMarkup = tgbotapi.ForceReply{
@@ -241,7 +205,7 @@ func (h *BotHandler) handleAddPushups(ctx context.Context, userID int64, usernam
 
 	if count > oneTimeEntryLimit {
 		msg := tgbotapi.NewMessage(chatID, "❌ Превышен лимит разового ввода (1000 отжиманий)")
-		msg.ReplyMarkup = ui.MainKeyboard(notEnable)
+		msg.ReplyMarkup = ui.MainKeyboard()
 		h.bot.Send(msg)
 		return
 	}
@@ -276,11 +240,11 @@ func (h *BotHandler) handleAddPushups(ctx context.Context, userID int64, usernam
 
 	msg := tgbotapi.NewMessage(chatID, response)
 	//msg.ParseMode = "Markdown"
-	msg.ReplyMarkup = ui.MainKeyboard(notEnable)
+	msg.ReplyMarkup = ui.MainKeyboard()
 	h.bot.Send(msg)
 }
 
-func (h *BotHandler) handleSetMaxReps(ctx context.Context, userID int64, username string, chatID int64, count int, notEnable bool) {
+func (h *BotHandler) handleSetMaxReps(ctx context.Context, userID int64, username string, chatID int64, count int) {
 	if count <= 0 {
 		msg := tgbotapi.NewMessage(chatID, "Пожалуйста, введите положительное число:")
 		msg.ReplyMarkup = tgbotapi.ForceReply{
@@ -301,7 +265,7 @@ func (h *BotHandler) handleSetMaxReps(ctx context.Context, userID int64, usernam
 
 	if count > maxRepsLimit {
 		msg := tgbotapi.NewMessage(chatID, "❌ Превышен лимит для одного подхода (500 отжиманий)")
-		msg.ReplyMarkup = ui.MainKeyboard(notEnable)
+		msg.ReplyMarkup = ui.MainKeyboard()
 		h.bot.Send(msg)
 		return
 	}
@@ -311,7 +275,7 @@ func (h *BotHandler) handleSetMaxReps(ctx context.Context, userID int64, usernam
 	if err != nil {
 		log.Printf("Ошибка при записи max_reps: %v", err)
 		msg := tgbotapi.NewMessage(chatID, "Произошла ошибка. Попробуйте позже.")
-		msg.ReplyMarkup = ui.MainKeyboard(notEnable)
+		msg.ReplyMarkup = ui.MainKeyboard()
 		//msg.ParseMode = "Markdown"
 		h.bot.Send(msg)
 		return
@@ -323,7 +287,7 @@ func (h *BotHandler) handleSetMaxReps(ctx context.Context, userID int64, usernam
 	if err != nil {
 		log.Printf("Ошибка при определении нормы: %v", err)
 		msg := tgbotapi.NewMessage(chatID, "Произошла ошибка. Попробуйте позже.")
-		msg.ReplyMarkup = ui.MainKeyboard(notEnable)
+		msg.ReplyMarkup = ui.MainKeyboard()
 		h.bot.Send(msg)
 		return
 	}
@@ -383,7 +347,7 @@ func (h *BotHandler) handleSetMaxReps(ctx context.Context, userID int64, usernam
 	log.Printf("Username %s UserID %d set max_reps: %d, daily_norm: %d", username, userID, count, dailyNorm)
 
 	msg := tgbotapi.NewMessage(chatID, response)
-	msg.ReplyMarkup = ui.MainKeyboard(notEnable)
+	msg.ReplyMarkup = ui.MainKeyboard()
 	h.bot.Send(msg)
 }
 
@@ -439,7 +403,7 @@ func (h *BotHandler) requestCustomNorm(chatID int64) {
 	h.sendCancelButton(chatID, inputTypeCustomNorm, sentMsg.MessageID)
 }
 
-func (h *BotHandler) handleTodayStat(ctx context.Context, userID int64, chatID int64, notEnable bool) {
+func (h *BotHandler) handleTodayStat(ctx context.Context, userID int64, chatID int64) {
 	total, err := h.service.GetTodayStat(ctx, userID)
 	if err != nil {
 		log.Printf("Ошибка при получении статистики: %v", err)
@@ -463,11 +427,11 @@ func (h *BotHandler) handleTodayStat(ctx context.Context, userID int64, chatID i
 	daylyStatText := fmt.Sprintf("📊Сегодня ты отжался %s \nТвоя дневная норма: %d \n%s\n", service.FormatTimesWord(total), dailyNorm, service.GenerateProgressBar(total, dailyNorm, 10))
 
 	msg := tgbotapi.NewMessage(chatID, daylyStatText)
-	msg.ReplyMarkup = ui.MainKeyboard(notEnable)
+	msg.ReplyMarkup = ui.MainKeyboard()
 	h.bot.Send(msg)
 }
 
-func (h *BotHandler) handleTotalStat(ctx context.Context, userID int64, chatID int64, notEnable bool) {
+func (h *BotHandler) handleTotalStat(ctx context.Context, userID int64, chatID int64) {
 	total, err := h.service.GetTotalStat(ctx, userID)
 	if err != nil {
 		log.Printf("Ошибка при получении статистики: %v", err)
@@ -488,11 +452,11 @@ func (h *BotHandler) handleTotalStat(ctx context.Context, userID int64, chatID i
 	}
 
 	msg := tgbotapi.NewMessage(chatID, statText+FirstWorkoutDateText)
-	msg.ReplyMarkup = ui.MainKeyboard(notEnable)
+	msg.ReplyMarkup = ui.MainKeyboard()
 	h.bot.Send(msg)
 }
 
-func (h *BotHandler) handleStart(ctx context.Context, chatID int64, userID int64, username string, notEnable bool) {
+func (h *BotHandler) handleStart(ctx context.Context, chatID int64, userID int64, username string) {
 	err := h.service.EnsureUser(ctx, userID, username)
 	if err != nil {
 		log.Printf("Ошибка при попытке создать или обновить пользователя: %v", err)
@@ -530,7 +494,7 @@ func (h *BotHandler) handleStart(ctx context.Context, chatID int64, userID int64
 
 	msg := tgbotapi.NewMessage(chatID, welcomeMsg+"\n\nВыберите действие:")
 	msg.ParseMode = "Markdown"
-	msg.ReplyMarkup = ui.MainKeyboard(notEnable)
+	msg.ReplyMarkup = ui.MainKeyboard()
 	h.bot.Send(msg)
 }
 
@@ -554,7 +518,7 @@ func (h *BotHandler) handleTodayLeaderboard(ctx context.Context, chatID int64) {
 }
 
 // Добавим новую функцию для обработки установки дневной нормы
-func (h *BotHandler) handleSetCustomNorm(ctx context.Context, userID int64, chatID int64, dailyNorm int, notEnable bool) {
+func (h *BotHandler) handleSetCustomNorm(ctx context.Context, userID int64, chatID int64, dailyNorm int) {
 	if dailyNorm <= 0 {
 
 		msg := tgbotapi.NewMessage(chatID, "Пожалуйста, введите положительное число:")
@@ -576,7 +540,7 @@ func (h *BotHandler) handleSetCustomNorm(ctx context.Context, userID int64, chat
 
 	if dailyNorm > castomDailyNormLimit {
 		msg := tgbotapi.NewMessage(chatID, "❌ Максимальная дневная норма - 500 отжиманий")
-		msg.ReplyMarkup = ui.MainKeyboard(notEnable)
+		msg.ReplyMarkup = ui.MainKeyboard()
 		h.bot.Send(msg)
 		return
 	}
@@ -590,7 +554,7 @@ func (h *BotHandler) handleSetCustomNorm(ctx context.Context, userID int64, chat
 		return
 	}
 	msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("✅ Дневная норма установлена: %d", dailyNorm))
-	msg.ReplyMarkup = ui.MainKeyboard(notEnable)
+	//msg.ReplyMarkup = ui.MainKeyboard(notEnable)
 	h.bot.Send(msg)
 }
 
@@ -646,47 +610,21 @@ func (h *BotHandler) clearPendingInput(chatID int64) {
 	h.pendingInputs.Delete(chatID)
 }
 
-// Добавляем новый метод для переключения напоминаний
-func (h *BotHandler) handleToggleNotifications(ctx context.Context, userID int64, chatID int64, enable bool) {
-	var err error
-	var message string
-
-	if enable {
-		err = h.service.EnableNotifications(ctx, userID)
-		message = "🔔 Напоминания включены! Буду напоминать о тренировках."
-	} else {
-
-		err = h.service.DisableNotifications(ctx, userID)
-		message = "🔕 Напоминания отключены. Не забывай тренироваться самостоятельно! 💪"
-	}
-
-	if err != nil {
-		log.Printf("Ошибка переключения напоминаний: %v", err)
-		msg := tgbotapi.NewMessage(chatID, "Ошибка изменения настроек уведомлений")
-		msg.ReplyMarkup = ui.MainKeyboard(enable)
-		h.bot.Send(msg)
-		return
-	}
-
-	msg := tgbotapi.NewMessage(chatID, message)
-	msg.ReplyMarkup = ui.MainKeyboard(enable)
-	h.bot.Send(msg)
-}
 
 // handleProgressHistory метод для обработки истории прогресса
-func (h *BotHandler) handleProgressHistory(ctx context.Context, userID int64, chatID int64, notEnable bool) {
+func (h *BotHandler) handleProgressHistory(ctx context.Context, userID int64, chatID int64) {
 	history, err := h.service.GetMaxRepsHistory(ctx, userID)
 	if err != nil {
 		log.Printf("Ошибка получения истории прогресса: %v", err)
 		msg := tgbotapi.NewMessage(chatID, "❌ Ошибка загрузки истории прогресса")
-		msg.ReplyMarkup = ui.MainKeyboard(notEnable)
+		//msg.ReplyMarkup = ui.MainKeyboard(notEnable)
 		h.bot.Send(msg)
 		return
 	}
 
 	if len(history) == 0 {
 		msg := tgbotapi.NewMessage(chatID, "📊 История прогресса пуста.\nИспользуй \"🎯 Обновить прогресс\" что бы начать историю прогресса!")
-		msg.ReplyMarkup = ui.MainKeyboard(notEnable)
+		//msg.ReplyMarkup = ui.MainKeyboard(notEnable)
 		h.bot.Send(msg)
 		return
 	}
@@ -718,7 +656,7 @@ func (h *BotHandler) handleProgressHistory(ctx context.Context, userID int64, ch
 	}
 
 	msg := tgbotapi.NewMessage(chatID, response.String())
-	msg.ReplyMarkup = ui.MainKeyboard(notEnable)
+	//msg.ReplyMarkup = ui.MainKeyboard(notEnable)
 	h.bot.Send(msg)
 
 	err = service.SendSchedule(h.bot, chatID, history)
@@ -728,7 +666,7 @@ func (h *BotHandler) handleProgressHistory(ctx context.Context, userID int64, ch
 }
 
 // handleInfo отправляет инструкцию по использованию бота
-func (h *BotHandler) handleInfo(chatID int64, notEnable bool) {
+func (h *BotHandler) handleInfo(chatID int64) {
 	instruction := `🤖 *Инструкция по использованию PushUpper*
 
 🎯 *Основные функции*
@@ -760,16 +698,6 @@ _Рекомендуется обновлять каждые 1-2 недели_
 Ручная установка индивидуальной дневной нормы
 Полезно если хотите тренироваться по собственному плану
 
-🔔 *Уведомления*
-
-*Напоминания о тренировках*
-Автоматическое напоминание если вы не выполнили норму за 2 дня
-Можно отключить/включить в любой момент
-
-*Напоминания о прогрессе*
-PushUpper предложит обновить рекорд если прошла неделя
-Помогает не забывать отслеживать рост силы
-
 💡 *Советы по использованию*
 
 1. *Начните с теста* - определите свой текущий уровень
@@ -781,6 +709,6 @@ PushUpper предложит обновить рекорд если прошла
 
 	msg := tgbotapi.NewMessage(chatID, instruction)
 	msg.ParseMode = "Markdown"
-	msg.ReplyMarkup = ui.MainKeyboard(notEnable)
+	msg.ReplyMarkup = ui.MainKeyboard()
 	h.bot.Send(msg)
 }
