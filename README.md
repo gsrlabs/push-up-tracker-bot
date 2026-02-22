@@ -43,7 +43,6 @@ CREATE TABLE users (
     daily_norm INT NOT NULL DEFAULT 40,
     notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Таблица ежедневной статистики
@@ -68,7 +67,7 @@ CREATE INDEX idx_pushups_date ON pushups(date);
 
 ### 2. Таймауты и контексты
 ```go
-ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 defer cancel()
 ```
 

@@ -5,35 +5,52 @@ import (
 	"fmt"
 	"log"
 	"os"
-
+	"os/signal"
 	"sync"
-	"time"
+	"syscall"
 
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5" // Импортируем библиотеку для работы с Telegram API
-	"github.com/jackc/pgx/v5/pgxpool"
-	
 	"trackerbot/bot"
 	"trackerbot/cache"
+	"trackerbot/config"
+	"trackerbot/db"
 	"trackerbot/repository"
 	"trackerbot/service"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5" // Импортируем библиотеку для работы с Telegram API
 )
+
+const configPath = "../config/config.yml"
 
 func main() {
 	// Инициализация окружения и конфигурации
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	// Загрузка переменных окружения из файла .env
-	// Используется пакет godotenv для удобной работы с переменными окружения
-	// В случае ошибки - аварийное завершение программы
-	// if err := godotenv.Load("../.env"); err != nil {
-	// 	log.Fatal("Ошибка загрузки .env файла")
-	// }
 
-	// 1. Получение токена Telegram бота из переменных окружения
-	// Безопасный способ хранения чувствительных данных
-	// При отсутствии токена - аварийное завершение
-	botToken := os.Getenv("BOT_TOKEN")
+	// Обработка сигналов завершения
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	
+	go func() {
+		<-sigChan
+		log.Println("Received shutdown signal")
+		cancel()
+	}()
+
+	log.Printf("INFO: starting application")
+
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		log.Fatalf("❌ Error loading config: %v", err)
+	}
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("❌ Invalid config: %v", err)
+	}
+
+	botToken := cfg.GetBotToken()
+
 	if botToken == "" {
-		log.Fatal("Токен не указан. Установите переменную окружения BOT_TOKEN")
+		log.Fatal("❌ TELEGRAM_BOT_TOKEN is not set")
 	}
 	fmt.Println(botToken) // Вывод токена для отладки (в продакшене следует убрать)
 
@@ -42,7 +59,7 @@ func main() {
 	// NewBotAPI возвращает объект BotAPI или ошибку
 	telegramBot, err := tgbotapi.NewBotAPI(botToken)
 	if err != nil {
-		log.Panic(err) // Аварийное завершение при ошибке инициализации
+		log.Fatalf("❌ Failed to create bot: %v", err)
 	}
 
 	// Проверяем подключение к боту
@@ -61,36 +78,15 @@ func main() {
 	// Self.UserName содержит имя вашего бота в Telegram
 	log.Printf("Авторизован как %s", telegramBot.Self.UserName)
 
-	// 4. Получение URL базы данных из переменных окружения
-	dbURL := fmt.Sprintf("postgresql://%s:%s@%s:%s/%s?sslmode=disable",
-		os.Getenv("DB_USER"),
-		os.Getenv("DB_PASSWORD"),
-		os.Getenv("DB_HOST"), // будет "postgres"
-		os.Getenv("DB_PORT"), // будет "5432"
-		os.Getenv("DB_NAME"))
-	if dbURL == "" {
-		log.Fatal("DATABASE_URL не указан. Установите переменные окружения")
-	}
-
-	// 5. Инициализация пула соединений с PostgreSQL
-	// pgxpool.New создает пул соединений с заданным контекстом
-	// Пул соединений улучшает производительность при частых запросах
-	dbPool, err := pgxpool.New(context.Background(), dbURL)
+	// DB
+	db, err := db.Connect(ctx, cfg)
 	if err != nil {
 		log.Panicf("Unable to connect to database: %v\n", err)
 	}
-	defer dbPool.Close() // Гарантированное закрытие соединений при завершении
-
-	// 6. Настройка параметров пула соединений
-	// Максимальное количество соединений в пуле
-	dbPool.Config().MaxConns = 10
-	// Максимальное время простаивания соединения
-	dbPool.Config().MaxConnIdleTime = 30 * time.Minute
-
-	// 7. Инициализация слоев приложения (архитектура Clean Architecture)
+	defer db.Pool.Close()
 
 	// Репозиторий для работы с данными отжиманий
-	pushupRepo := repository.NewPushupRepository(dbPool)
+	pushupRepo := repository.NewPushupRepository(db.Pool)
 
 	// Кеш для хранения сегодняшней статистики
 	todayCache := cache.NewTodayCache()
@@ -114,7 +110,6 @@ func main() {
 	// Получение канала обновлений
 	updates := telegramBot.GetUpdatesChan(u)
 
-	log.Println("Сервис напоминаний о прогрессе запущен")
 
 	// WaitGroup для ожидания завершения всех обработчиков
 	var wg sync.WaitGroup
@@ -134,6 +129,9 @@ func main() {
 		}(update)
 
 	}
+
+	<-ctx.Done()
+	log.Println("Shutting down gracefully...")
 
 	// Ожидание завершения всех обработчиков
 	wg.Wait()

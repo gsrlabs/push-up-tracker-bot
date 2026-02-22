@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 	"trackerbot/cache"
 	"trackerbot/repository"
@@ -32,6 +33,10 @@ func (s *PushupService) EnsureUser(ctx context.Context, userID int64, username s
 func (s *PushupService) AddPushups(ctx context.Context, userID int64, username string, count int) (*AddPushupsResult, error) {
 
 	today := time.Now().Truncate(24 * time.Hour)
+
+	log.Println("----------------------------------------")
+	log.Println("Время сейчас ", time.Now())
+	log.Println("----------------------------------------")
 
 	dailyNorm, err := s.repo.GetDailyNorm(ctx, userID)
 	if err != nil {
