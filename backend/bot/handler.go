@@ -35,12 +35,12 @@ type pendingInput struct {
 
 type BotHandler struct {
 	bot           *tgbotapi.BotAPI
-	service       *service.PushupService
+	service       service.PushupService
 	pendingInputs sync.Map
 	adminIDs      map[int64]bool
 }
 
-func NewBotHandler(bot *tgbotapi.BotAPI, service *service.PushupService) *BotHandler {
+func NewBotHandler(bot *tgbotapi.BotAPI, service service.PushupService) *BotHandler {
 	return &BotHandler{bot: bot, service: service, adminIDs: map[int64]bool{
 		1036193976: true, // user_id
 	}}
@@ -61,7 +61,7 @@ func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
 			h.bot.Send(editMsg)
 
 			// Отправляем новое сообщение с главной клавиатурой
-		
+
 			msg := tgbotapi.NewMessage(chatID, "Ввод отменен")
 			msg.ReplyMarkup = ui.MainKeyboard()
 			h.bot.Send(msg)
@@ -88,7 +88,6 @@ func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
 		if count, err := strconv.Atoi(text); err == nil {
 			// Успех — очищаем ожидание и обрабатываем
 			h.clearPendingInput(chatID)
-			
 
 			switch input.inputType {
 			case perDayLimit:
@@ -120,7 +119,6 @@ func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
 		return
 	}
 
-	
 	// Сброс дневной нормы и maxReps
 	if text == "/reset_norm" {
 		if err := h.service.ResetDailyNorm(ctx, userID); err != nil {
@@ -223,7 +221,7 @@ func (h *BotHandler) handleAddPushups(ctx context.Context, userID int64, usernam
 	response := fmt.Sprintf("✅Добавлено: %d отжиманий!\n📈Твой прогресс: %d/%d\n", count, result.TotalToday, result.DailyNorm)
 
 	// Проверка выполнения нормы
-	hasCompleted, firstCompleter := h.service.CheckNormCompletion(ctx, result.DailyNorm)
+	hasCompleted, firstCompleter := h.service.CheckNormCompletion(ctx)
 
 	if result.TotalToday >= result.DailyNorm {
 		response += "\n🎯 Ты выполнил дневную норму!\n"
@@ -608,7 +606,6 @@ func (h *BotHandler) clearPendingInput(chatID int64) {
 	}
 	h.pendingInputs.Delete(chatID)
 }
-
 
 // handleProgressHistory метод для обработки истории прогресса
 func (h *BotHandler) handleProgressHistory(ctx context.Context, userID int64, chatID int64) {

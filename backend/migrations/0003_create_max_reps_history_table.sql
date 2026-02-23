@@ -9,4 +9,4 @@ CREATE TABLE max_reps_history (
 );
 
 -- +goose Down
-DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS max_reps_history;

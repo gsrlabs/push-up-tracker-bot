@@ -11,8 +11,29 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+type PushupRepository interface {
+	Pool() *pgxpool.Pool
+	EnsureUser(ctx context.Context, userID int64, username string) error
+	AddPushups(ctx context.Context, userID int64, date time.Time, count int) error
+	GetTodayStat(ctx context.Context, userID int64, date time.Time) (int, error)
+	GetTotalStat(ctx context.Context, userID int64) (int, error)
+	GetTodayLeaderboard(ctx context.Context) ([]LeaderboardItem, error)
+	GetUsername(ctx context.Context, userID int64) (string, error)
+	SetMaxReps(ctx context.Context, userID int64, count int) error
+	SetDateCompletionOfDailyNorm(ctx context.Context, userID int64) error
+	GetUserMaxReps(ctx context.Context, userID int64) (int, error)
+	ResetDailyNorm(ctx context.Context, userID int64) error
+	SetDailyNorm(ctx context.Context, userID int64, dailyNorm int) error
+	GetDailyNorm(ctx context.Context, userID int64) (int, error)
+	GetFirstWorkoutDate(ctx context.Context, userID int64) (time.Time, error)
+	GetFirstNormCompleter(ctx context.Context, date time.Time) (int64, error)
+	AddMaxRepsHistory(ctx context.Context, userID int64, maxReps int) error
+	GetMaxRepsHistory(ctx context.Context, userID int64) ([]MaxRepsHistoryItem, error)
+	GetMaxRepsRecord(ctx context.Context, userID int64) (MaxRepsHistoryItem, error)
+}
+
 // PushupRepository предоставляет методы для работы с данными отжиманий в БД
-type PushupRepository struct {
+type pushupRepository struct {
 	pool *pgxpool.Pool // Пул соединений с PostgreSQL
 }
 
@@ -28,16 +49,16 @@ type MaxRepsHistoryItem struct {
 }
 
 // NewPushupRepository создает новый экземпляр репозитория
-func NewPushupRepository(pool *pgxpool.Pool) *PushupRepository {
-	return &PushupRepository{pool: pool}
+func NewPushupRepository(pool *pgxpool.Pool) PushupRepository {
+	return &pushupRepository{pool: pool}
 }
 
-func (r *PushupRepository) Pool() *pgxpool.Pool {
+func (r *pushupRepository) Pool() *pgxpool.Pool {
 	return r.pool
 }
 
 // EnsureUser создает или обновляет пользователя
-func (r *PushupRepository) EnsureUser(ctx context.Context, userID int64, username string) error {
+func (r *pushupRepository) EnsureUser(ctx context.Context, userID int64, username string) error {
 	query := `
     INSERT INTO users (user_id, username)
     VALUES ($1, $2)
@@ -49,14 +70,19 @@ func (r *PushupRepository) EnsureUser(ctx context.Context, userID int64, usernam
 	return err
 }
 
-func (r *PushupRepository) AddPushups(ctx context.Context, userID int64, date time.Time, count int) error {
-	query := `INSERT INTO pushups (user_id, date, count) VALUES ($1, $2, $3)`
+func (r *pushupRepository) AddPushups(ctx context.Context, userID int64, date time.Time, count int) error {
+	query := `
+	INSERT INTO pushups (user_id, date, count)
+	VALUES ($1, $2, $3)
+	ON CONFLICT (user_id, date)
+	DO UPDATE SET 
+		count = pushups.count + EXCLUDED.count`
 	_, err := r.pool.Exec(ctx, query, userID, date, count)
 	return err
 }
 
 // GetTodayStat возвращает суммарное количество отжиманий пользователя за указанную дату
-func (r *PushupRepository) GetTodayStat(ctx context.Context, userID int64, date time.Time) (int, error) {
+func (r *pushupRepository) GetTodayStat(ctx context.Context, userID int64, date time.Time) (int, error) {
 	query := `SELECT COALESCE(SUM(count), 0) FROM pushups WHERE user_id = $1 AND date = $2`
 	var total int
 	err := r.pool.QueryRow(ctx, query, userID, date.Truncate(24*time.Hour)).Scan(&total)
@@ -64,7 +90,7 @@ func (r *PushupRepository) GetTodayStat(ctx context.Context, userID int64, date 
 }
 
 // GetTotalStat возвращает суммарное количество отжиманий пользователя за все время
-func (r *PushupRepository) GetTotalStat(ctx context.Context, userID int64) (int, error) {
+func (r *pushupRepository) GetTotalStat(ctx context.Context, userID int64) (int, error) {
 	query := `SELECT COALESCE(SUM(count), 0) FROM pushups WHERE user_id = $1`
 	var total int
 	err := r.pool.QueryRow(ctx, query, userID).Scan(&total)
@@ -72,7 +98,7 @@ func (r *PushupRepository) GetTotalStat(ctx context.Context, userID int64) (int,
 }
 
 // New methods for leaderboards
-func (r *PushupRepository) GetTodayLeaderboard(ctx context.Context) ([]LeaderboardItem, error) {
+func (r *pushupRepository) GetTodayLeaderboard(ctx context.Context) ([]LeaderboardItem, error) {
 	query := `
     SELECT u.username, SUM(p.count) AS count
     FROM pushups p
@@ -99,7 +125,7 @@ func (r *PushupRepository) GetTodayLeaderboard(ctx context.Context) ([]Leaderboa
 }
 
 // GetUsername возвращает username пользователя
-func (r *PushupRepository) GetUsername(ctx context.Context, userID int64) (string, error) {
+func (r *pushupRepository) GetUsername(ctx context.Context, userID int64) (string, error) {
 	query := `SELECT username FROM users WHERE user_id = $1`
 	var username string
 	err := r.pool.QueryRow(ctx, query, userID).Scan(&username)
@@ -110,31 +136,31 @@ func (r *PushupRepository) GetUsername(ctx context.Context, userID int64) (strin
 }
 
 // SetMaxReps теперь обновляет и timestamp
-func (r *PushupRepository) SetMaxReps(ctx context.Context, userID int64, count int) error {
-    query := `UPDATE users SET max_reps = $1, last_updated_max_reps = CURRENT_TIMESTAMP WHERE user_id = $2`
-    _, err := r.pool.Exec(ctx, query, count, userID)
-    return err
+func (r *pushupRepository) SetMaxReps(ctx context.Context, userID int64, count int) error {
+	query := `UPDATE users SET max_reps = $1, last_updated_max_reps = CURRENT_TIMESTAMP WHERE user_id = $2`
+	_, err := r.pool.Exec(ctx, query, count, userID)
+	return err
 }
 
 // SetDateCompletionOfDailyNorm установка даты выполнения дневной нормы
-func (r *PushupRepository) SetDateCompletionOfDailyNorm(ctx context.Context, userID int64) error {
-    query := `UPDATE users SET last_updated = CURRENT_TIMESTAMP WHERE user_id = $1`
-    _, err := r.pool.Exec(ctx, query, userID)
-    return err
+func (r *pushupRepository) SetDateCompletionOfDailyNorm(ctx context.Context, userID int64) error {
+	query := `UPDATE users SET last_updated = CURRENT_TIMESTAMP WHERE user_id = $1`
+	_, err := r.pool.Exec(ctx, query, userID)
+	return err
 }
 
 // GetLastMaxRepsUpdate возвращает дату последнего обновления max_reps
-func (r *PushupRepository) GetLastMaxRepsUpdate(ctx context.Context, userID int64) (time.Time, error) {
-    query := `SELECT last_updated_max_reps FROM users WHERE user_id = $1`
-    var lastUpdate time.Time
-    err := r.pool.QueryRow(ctx, query, userID).Scan(&lastUpdate)
-    if err != nil {
-        return time.Time{}, err
-    }
-    return lastUpdate, nil
+func (r *pushupRepository) GetLastMaxRepsUpdate(ctx context.Context, userID int64) (time.Time, error) {
+	query := `SELECT last_updated_max_reps FROM users WHERE user_id = $1`
+	var lastUpdate time.Time
+	err := r.pool.QueryRow(ctx, query, userID).Scan(&lastUpdate)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return lastUpdate, nil
 }
 
-func (r *PushupRepository) GetUserMaxReps(ctx context.Context, userID int64) (int, error) {
+func (r *pushupRepository) GetUserMaxReps(ctx context.Context, userID int64) (int, error) {
 	query := `SELECT max_reps FROM users WHERE user_id = $1`
 	var maxReps int
 	err := r.pool.QueryRow(ctx, query, userID).Scan(&maxReps)
@@ -142,30 +168,28 @@ func (r *PushupRepository) GetUserMaxReps(ctx context.Context, userID int64) (in
 }
 
 // ResetMaxReps сбрасывает max_reps и daily_norm пользователя на значение по умолчанию
-func (r *PushupRepository) ResetDailyNorm(ctx context.Context, userID int64) error {
+func (r *pushupRepository) ResetDailyNorm(ctx context.Context, userID int64) error {
 	query := `UPDATE users SET daily_norm = 40 WHERE user_id = $1`
 	_, err := r.pool.Exec(ctx, query, userID)
 	return err
 }
 
-func (r *PushupRepository) SetDailyNorm(ctx context.Context, userID int64, dailyNorm int) error {
+func (r *pushupRepository) SetDailyNorm(ctx context.Context, userID int64, dailyNorm int) error {
 	query := `UPDATE users SET daily_norm = $1 WHERE user_id = $2`
 	_, err := r.pool.Exec(ctx, query, dailyNorm, userID)
 	return err
 }
 
 // GetDailyNorm возвращает дневную норму пользователя
-func (r *PushupRepository) GetDailyNorm(ctx context.Context, userID int64) (int, error) {
+func (r *pushupRepository) GetDailyNorm(ctx context.Context, userID int64) (int, error) {
 	query := `SELECT daily_norm FROM users WHERE user_id = $1`
 	var dailyNorm int
 	err := r.pool.QueryRow(ctx, query, userID).Scan(&dailyNorm)
 	return dailyNorm, err
 }
 
-
-
 // GetFirstWorkoutDate возвращает дату первой тренировки пользователя
-func (r *PushupRepository) GetFirstWorkoutDate(ctx context.Context, userID int64) (time.Time, error) {
+func (r *pushupRepository) GetFirstWorkoutDate(ctx context.Context, userID int64) (time.Time, error) {
 	query := `
         SELECT COALESCE(MIN(date), '0001-01-01'::DATE) 
         FROM pushups 
@@ -183,7 +207,7 @@ func (r *PushupRepository) GetFirstWorkoutDate(ctx context.Context, userID int64
 	return firstDate, nil
 }
 
-func (r *PushupRepository) GetFirstNormCompleter(ctx context.Context, date time.Time) (int64, error) {
+func (r *pushupRepository) GetFirstNormCompleter(ctx context.Context, date time.Time) (int64, error) {
 	query := `
         SELECT user_id 
         FROM pushups 
@@ -202,9 +226,8 @@ func (r *PushupRepository) GetFirstNormCompleter(ctx context.Context, date time.
 	return userID, nil
 }
 
-
 // AddMaxRepsHistory добавляет запись об отжиманиях за подход в историю
-func (r *PushupRepository) AddMaxRepsHistory(ctx context.Context, userID int64, maxReps int) error {
+func (r *pushupRepository) AddMaxRepsHistory(ctx context.Context, userID int64, maxReps int) error {
 	query := `
     INSERT INTO max_reps_history (user_id, date, max_reps) 
     VALUES ($1, CURRENT_DATE, $2)
@@ -216,7 +239,7 @@ func (r *PushupRepository) AddMaxRepsHistory(ctx context.Context, userID int64, 
 }
 
 // GetMaxRepsHistory возвращает историю об отжиманий за подход пользователя
-func (r *PushupRepository) GetMaxRepsHistory(ctx context.Context, userID int64) ([]MaxRepsHistoryItem, error) {
+func (r *pushupRepository) GetMaxRepsHistory(ctx context.Context, userID int64) ([]MaxRepsHistoryItem, error) {
 	query := `
     SELECT date, max_reps 
     FROM max_reps_history 
@@ -241,7 +264,7 @@ func (r *PushupRepository) GetMaxRepsHistory(ctx context.Context, userID int64) 
 	return history, nil
 }
 
-func (r *PushupRepository) GetMaxRepsRecord(ctx context.Context, userID int64) (MaxRepsHistoryItem, error) {
+func (r *pushupRepository) GetMaxRepsRecord(ctx context.Context, userID int64) (MaxRepsHistoryItem, error) {
 	query := `
     SELECT date, max_reps 
 	FROM max_reps_history 
@@ -258,4 +281,3 @@ func (r *PushupRepository) GetMaxRepsRecord(ctx context.Context, userID int64) (
 
 	return maxRepsRecord, nil
 }
-

@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 
 	"trackerbot/bot"
 	"trackerbot/cache"
@@ -26,11 +27,10 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-
 	// Обработка сигналов завершения
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	
+
 	go func() {
 		<-sigChan
 		log.Println("Received shutdown signal")
@@ -45,6 +45,11 @@ func main() {
 	}
 	if err := cfg.Validate(); err != nil {
 		log.Fatalf("❌ Invalid config: %v", err)
+	}
+
+	loc, err := time.LoadLocation(cfg.App.Timezone)
+	if err != nil {
+		log.Fatalf("❌ Invalid timezone: %v", err)
 	}
 
 	botToken := cfg.GetBotToken()
@@ -89,13 +94,13 @@ func main() {
 	pushupRepo := repository.NewPushupRepository(db.Pool)
 
 	// Кеш для хранения сегодняшней статистики
-	todayCache := cache.NewTodayCache()
+	todayCache := cache.NewTodayCache(ctx, loc)
 
 	// Запуск фоновой горутины для ежедневного сброса кеша
-	go todayCache.ResetDaily()
+	//go todayCache.ResetDaily(time.Local)
 
 	// Сервисный слой с бизнес-логикой
-	pushupService := service.NewPushupService(*pushupRepo, todayCache)
+	pushupService := service.NewPushupService(pushupRepo, todayCache, loc)
 
 	// Обработчик Telegram бота
 	botHandler := bot.NewBotHandler(telegramBot, pushupService)
@@ -109,7 +114,6 @@ func main() {
 
 	// Получение канала обновлений
 	updates := telegramBot.GetUpdatesChan(u)
-
 
 	// WaitGroup для ожидания завершения всех обработчиков
 	var wg sync.WaitGroup

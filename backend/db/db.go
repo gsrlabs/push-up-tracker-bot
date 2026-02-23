@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"net/url"
 	"time"
 	"trackerbot/config"
 
@@ -87,8 +88,17 @@ func runMigrations(dsn, migrationsPath string, mode bool) error {
 
 
 func maskPassword(dsn string) string {
-	// Простая маскировка, можно улучшить
-	return dsn // В реальности нужно заменять пароль на ***
+    parsed, err := url.Parse(dsn)
+    if err != nil {
+        return "***invalid dsn***"
+    }
+
+    if parsed.User != nil {
+        username := parsed.User.Username()
+        parsed.User = url.UserPassword(username, "***")
+    }
+
+    return parsed.String()
 }
 
 // GetPool returns the underlying connection pool
