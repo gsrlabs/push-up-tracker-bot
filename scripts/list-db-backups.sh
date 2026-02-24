@@ -1,42 +1,83 @@
 #!/bin/bash
 
-# Конфигурация
-BACKUP_DIR="./backups/db"
+BACKUP_DIR="./backups"
 
-echo "🗄️  Доступные бекапы базы данных:"
-echo ""
+# Цвета
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
 
-# Проверяем есть ли бекапы
-if [ ! -d "$BACKUP_DIR" ] || [ -z "$(ls -A "$BACKUP_DIR" 2>/dev/null)" ]; then
-    echo "❌ Бекапы не найдены в директории: $BACKUP_DIR"
-    echo "💡 Создайте бекап: ./scripts/backup.sh"
+if [ ! -d "$BACKUP_DIR" ]; then
+    echo "❌ Директория бекапов не найдена: $BACKUP_DIR"
     exit 1
 fi
 
-# Простой вывод через ls
-echo "Бекапы (последние 20):"
-ls -lt "$BACKUP_DIR"/*.gz 2>/dev/null | head -20 | awk '{ 
-    if(NR>1) {
-        date = $6 " " $7 " " $8
-        file = $9
-        printf "📅 %s | 📁 %s\n", date, file
-    }
-}'
+echo "📋 Список всех бекапов:"
+echo ""
 
-total_count=$(ls "$BACKUP_DIR"/*.gz 2>/dev/null | wc -l)
+# Счетчики по типам
+full_count=0
+data_count=0
+schema_count=0
+volume_count=0
 
-# Получаем последний бекап для примера
-latest_backup=$(ls -t "$BACKUP_DIR"/*.gz 2>/dev/null | head -1)
-latest_filename=$(basename "$latest_backup" 2>/dev/null)
+# Вывод в табличном формате
+printf "${BLUE}%-25s %-15s %-10s %s${NC}\n" "Имя файла" "Тип" "Размер" "Дата создания"
+printf "%s\n" "----------------------------------------------------------------------"
+
+for file in "$BACKUP_DIR"/*.gz; do
+    if [ -f "$file" ]; then
+        filename=$(basename "$file")
+        size=$(du -h "$file" | cut -f1)
+        
+        # Определяем тип
+        case "$filename" in
+            *full*)
+                type="Полный"
+                ((full_count++))
+                ;;
+            *data*)
+                type="Данные"
+                ((data_count++))
+                ;;
+            *schema*)
+                type="Схема"
+                ((schema_count++))
+                ;;
+            *volume*)
+                type="Volume"
+                ((volume_count++))
+                ;;
+            *)
+                type="Другое"
+                ;;
+        esac
+        
+        # Извлекаем дату из имени файла
+        if [[ $filename =~ ([0-9]{8}_[0-9]{6}) ]]; then
+            date_str="${BASH_REMATCH[1]}"
+            formatted_date=$(date -d "${date_str:0:8} ${date_str:9:2}:${date_str:11:2}:${date_str:13:2}" +"%d.%m.%Y %H:%M" 2>/dev/null || echo "неизвестно")
+        else
+            formatted_date="неизвестно"
+        fi
+        
+        printf "%-25s %-15s %-10s %s\n" "$filename" "$type" "$size" "$formatted_date"
+    fi
+done
 
 echo ""
-echo "📊 Всего бекапов: $total_count"
-echo ""
-echo "💡 Для восстановления: ./scripts/restore-db.sh <имя_файла>"
+echo "📊 Статистика по типам:"
+echo "   🗄️  Полные бекапы: $full_count"
+echo "   📊 Бекапы данных: $data_count"
+echo "   📐 Бекапы схемы: $schema_count"
+echo "   💾 Volume бекапы: $volume_count"
 
-if [ -n "$latest_filename" ]; then
-    echo "💡 Пример: ./scripts/restore-db.sh $latest_filename"
-else
-	echo "💡 Пример: "
-    echo "./scripts/restore-db.sh pushup_tracker_20241215_143022.sql.gz"
+# Проверяем наличие символических ссылок
+echo ""
+if [ -L "$BACKUP_DIR/latest_full.sql.gz" ]; then
+    echo -e "${GREEN}✅ Последний полный бекап: $(readlink $BACKUP_DIR/latest_full.sql.gz)${NC}"
+fi
+if [ -L "$BACKUP_DIR/latest_volume.tar.gz" ]; then
+    echo -e "${GREEN}✅ Последний volume бекап: $(readlink $BACKUP_DIR/latest_volume.tar.gz)${NC}"
 fi

@@ -5,14 +5,12 @@ import (
 	"log"
 	"trackerbot/repository"
 
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-
 	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"
 	"gonum.org/v1/plot/vg"
 )
 
-func SendSchedule(bot *tgbotapi.BotAPI, chatID int64, items []repository.MaxRepsHistoryItem) error {
+func SendSchedule(chatID int64, items []repository.MaxRepsHistoryItem) (bytes.Buffer, error) {
 	
 	points := make(plotter.XYs, len(items))
 
@@ -41,19 +39,9 @@ func SendSchedule(bot *tgbotapi.BotAPI, chatID int64, items []repository.MaxReps
 
 	_, err = writerTo.WriteTo(&buf)
 	if err != nil {
-		return err
+		return bytes.Buffer{}, err
 	}
 
-		// Отправляем в телеграм
-	photo := tgbotapi.NewPhoto(chatID, tgbotapi.FileBytes{
-		Name:  "progress.png",
-		Bytes: buf.Bytes(),
-	})
-	photo.Caption = "График прогресса максимальных отжиманий."
-
-	if _, err := bot.Send(photo); err != nil {
-		log.Fatal(err)
-	}
-	return nil
+	return buf, nil
 
 }

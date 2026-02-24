@@ -1,0 +1,99 @@
+name: Backend CI
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    name: Lint • Build • Test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: pushup_user
+          POSTGRES_PASSWORD: password123
+          POSTGRES_DB: pushup_tracker
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pushup_user -d pushup_tracker"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_USER: pushup_user
+      DB_PASSWORD: password123
+      DB_NAME: pushup_tracker
+      MIGRATIONS_PATH_TEST: ./migrations
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # -----------------------
+      # Setup Go
+      # -----------------------
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.5'
+          cache: true
+
+      # -----------------------
+      # Download deps
+      # -----------------------
+      - name: Download dependencies
+        working-directory: ./backend
+        run: go mod download
+
+      # -----------------------
+      # Run Linter
+      # -----------------------
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          working-directory: ./backend
+          version: latest
+
+      # -----------------------
+      # Build
+      # -----------------------
+      - name: Build application
+        working-directory: ./backend
+        run: go build -v -o app-binary ./main.go
+
+      # -----------------------
+      # Wait for Postgres
+      # -----------------------
+      - name: Wait for Postgres
+        run: |
+          until pg_isready -h localhost -p 5432 -U pushup_user -d pushup_tracker; do
+            echo "Waiting for postgres..."
+            sleep 2
+          done
+
+      # -----------------------
+      # Install Goose
+      # -----------------------
+      - name: Install goose
+        run: go install github.com/pressly/goose/v3/cmd/goose@latest
+
+      # -----------------------
+      # Apply Migrations
+      # -----------------------
+      - name: Apply migrations
+        working-directory: ./backend
+        run: |
+          goose -dir ./migrations postgres \
+          "host=localhost port=5432 user=pushup_user password=password123 dbname=pushup_tracker sslmode=disable" up
+
+      # -----------------------
+      # Run Tests (race + no parallel DB)
+      # -----------------------
+      - name: Run tests
+        working-directory: ./backend
+        run: go test -v -race -p 1 ./...
