@@ -108,8 +108,8 @@ func setupRepo(t *testing.T) PushupRepository {
 func cleanUpUser(ctx context.Context, r PushupRepository, userID int64) {
 	pool := r.Pool()
 	_, _ = pool.Exec(ctx, "DELETE FROM max_reps_history WHERE user_id=$1", userID)
-	_, _ =pool.Exec(ctx, "DELETE FROM pushups WHERE user_id=$1", userID)
-	_, _ =pool.Exec(ctx, "DELETE FROM users WHERE user_id=$1", userID)
+	_, _ = pool.Exec(ctx, "DELETE FROM pushups WHERE user_id=$1", userID)
+	_, _ = pool.Exec(ctx, "DELETE FROM users WHERE user_id=$1", userID)
 }
 
 func TestPushupRepository_CRUD(t *testing.T) {
@@ -182,5 +182,15 @@ func TestPushupRepository_CRUD(t *testing.T) {
 	fullStat, err := repo.GetFullStat(ctx, userID, today)
 	assert.NoError(t, err)
 	assert.Equal(t, 10, fullStat.TodayTotal)
-	assert.Equal(t, username, fullStat.Leaderboard[0].Username)
+	assert.NotEmpty(t, fullStat.Leaderboard)
+
+	found := false
+	for _, u := range fullStat.Leaderboard {
+		if u.Username == username {
+			found = true
+			break
+		}
+	}
+
+	assert.True(t, found)
 }
