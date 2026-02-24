@@ -29,7 +29,6 @@ jobs:
       DB_PASSWORD: password123
       DB_NAME: pushup_tracker
       MIGRATIONS_PATH_TEST: ./migrations
-      CGO_ENABLED: 0
 
     steps:
       - name: Checkout repository
