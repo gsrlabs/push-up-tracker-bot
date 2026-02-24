@@ -3,7 +3,9 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"os"
+
 	"strings"
 
 	"github.com/spf13/viper"
@@ -156,4 +158,35 @@ func (c *Config) GetBotToken() string {
 		return c.Bot.Token
 	}
 	return os.Getenv("TELEGRAM_BOT_TOKEN")
+}
+
+// GetConfig загружает конфигурацию, перебирая возможные пути
+func GetConfig() (*Config, error) {
+
+	// Возможные пути для поиска
+	configPaths := []string{
+		"/config/config.yml",           // Docker
+		"../../../config/config.yml",    // Глубоко в структуре
+		"../../config/config.yml",       // На уровень глубже
+		"../config/config.yml",          // В родительской директории
+		"./config/config.yml",           // В текущей директории
+		"config/config.yml",              // Относительный путь
+		"./config.yaml",                  // YAML в текущей
+		"config.yaml",                     // YAML относительно
+	}
+
+	var lastErr error
+
+	// Перебираем все пути
+	for _, p := range configPaths {
+		cfg, err := Load(p)
+		if err == nil {
+			log.Printf("INFO: loaded config from %s", p)
+			return cfg, nil
+		}
+		lastErr = err
+	}
+
+	// Если ничего не нашли, возвращаем ошибку
+	return nil, lastErr
 }

@@ -4,6 +4,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"time"
@@ -15,9 +16,8 @@ type PushupRepository interface {
 	Pool() *pgxpool.Pool
 	EnsureUser(ctx context.Context, userID int64, username string) error
 	AddPushups(ctx context.Context, userID int64, date time.Time, count int) error
+	GetFullStat(ctx context.Context, userID int64, date time.Time) (*FullStatData, error)
 	GetTodayStat(ctx context.Context, userID int64, date time.Time) (int, error)
-	GetTotalStat(ctx context.Context, userID int64) (int, error)
-	GetTodayLeaderboard(ctx context.Context) ([]LeaderboardItem, error)
 	GetUsername(ctx context.Context, userID int64) (string, error)
 	SetMaxReps(ctx context.Context, userID int64, count int) error
 	SetDateCompletionOfDailyNorm(ctx context.Context, userID int64) error
@@ -41,6 +41,14 @@ type LeaderboardItem struct {
 	Rank     int // Будет добавляться в сервисе
 	Username string
 	Count    int
+}
+
+type FullStatData struct {
+	TodayTotal       int
+	TotalAllTime     int
+	DailyNorm        int
+	FirstWorkoutDate *time.Time
+	Leaderboard      []LeaderboardItem
 }
 
 type MaxRepsHistoryItem struct {
@@ -81,6 +89,74 @@ func (r *pushupRepository) AddPushups(ctx context.Context, userID int64, date ti
 	return err
 }
 
+func (r *pushupRepository) GetFullStat(
+	ctx context.Context,
+	userID int64,
+	date time.Time,
+) (*FullStatData, error) {
+
+	query := `
+WITH user_stats AS (
+    SELECT
+        COALESCE(SUM(count) FILTER (WHERE date = $2), 0) AS today_total,
+        COALESCE(SUM(count), 0) AS total_all_time,
+        MIN(date) AS first_date
+    FROM pushups
+    WHERE user_id = $1
+),
+leaderboard AS (
+    SELECT json_agg(
+        json_build_object(
+            'username', username,
+            'count', total_count
+        )
+        ORDER BY total_count DESC
+    ) AS data
+    FROM (
+        SELECT u.username, SUM(p.count) AS total_count
+        FROM pushups p
+        JOIN users u ON u.user_id = p.user_id
+        WHERE p.date = $2
+        GROUP BY u.username
+    ) t
+)
+SELECT
+    us.today_total,
+    us.total_all_time,
+    u.daily_norm,
+    us.first_date,
+    COALESCE(lb.data, '[]'::json)
+FROM users u
+CROSS JOIN user_stats us
+LEFT JOIN leaderboard lb ON true
+WHERE u.user_id = $1;
+	`
+
+	var result FullStatData
+	var leaderboardJSON []byte
+
+	err := r.pool.QueryRow(ctx, query, userID, date).
+		Scan(
+			&result.TodayTotal,
+			&result.TotalAllTime,
+			&result.DailyNorm,
+			&result.FirstWorkoutDate,
+			&leaderboardJSON,
+		)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if len(leaderboardJSON) > 0 {
+		if err := json.Unmarshal(leaderboardJSON, &result.Leaderboard); err != nil {
+			return nil, err
+		}
+	}
+
+	return &result, nil
+}
+
 // GetTodayStat возвращает суммарное количество отжиманий пользователя за указанную дату
 func (r *pushupRepository) GetTodayStat(ctx context.Context, userID int64, date time.Time) (int, error) {
 	query := `SELECT COALESCE(SUM(count), 0) FROM pushups WHERE user_id = $1 AND date = $2`
@@ -89,40 +165,6 @@ func (r *pushupRepository) GetTodayStat(ctx context.Context, userID int64, date 
 	return total, err
 }
 
-// GetTotalStat возвращает суммарное количество отжиманий пользователя за все время
-func (r *pushupRepository) GetTotalStat(ctx context.Context, userID int64) (int, error) {
-	query := `SELECT COALESCE(SUM(count), 0) FROM pushups WHERE user_id = $1`
-	var total int
-	err := r.pool.QueryRow(ctx, query, userID).Scan(&total)
-	return total, err
-}
-
-// New methods for leaderboards
-func (r *pushupRepository) GetTodayLeaderboard(ctx context.Context) ([]LeaderboardItem, error) {
-	query := `
-    SELECT u.username, SUM(p.count) AS count
-    FROM pushups p
-    JOIN users u ON p.user_id = u.user_id
-    WHERE p.date = CURRENT_DATE
-    GROUP BY u.username
-    ORDER BY count DESC`
-
-	rows, err := r.pool.Query(ctx, query)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var items []LeaderboardItem
-	for rows.Next() {
-		var item LeaderboardItem
-		if err := rows.Scan(&item.Username, &item.Count); err != nil {
-			return nil, err
-		}
-		items = append(items, item)
-	}
-	return items, nil
-}
 
 // GetUsername возвращает username пользователя
 func (r *pushupRepository) GetUsername(ctx context.Context, userID int64) (string, error) {

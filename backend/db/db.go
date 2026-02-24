@@ -68,7 +68,8 @@ func runMigrations(dsn, migrationsPath string, mode bool) error {
 	defer func() {
 		err := db.Close()
 		if err != nil {
-			fmt.Errorf("error close database %v", err)
+			log.Fatalf("error close database %v", err)
+			
 		}
 	}()
 

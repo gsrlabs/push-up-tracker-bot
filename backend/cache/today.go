@@ -30,29 +30,38 @@ func NewTodayCache(ctx context.Context, location *time.Location) *TodayCache {
 		location: location,
 	}
 
+	// Создаем директорию cache если её нет
 	if err := os.MkdirAll(filepath.Dir(c.filename), 0755); err != nil {
 		log.Printf("Не удалось создать директорию для кэша: %v", err)
 	}
 
+	// Загружаем существующий кэш
 	if err := c.Load(); err != nil {
 		log.Printf("Не удалось загрузить кэш (%s): %v", c.filename, err)
 	}
 
+	// Запускаем фоновый автосейв
 	go c.autoSaveLoop(ctx)
+
+	// Запускаем цикл сброса кэша
 	go c.resetDailyLoop(ctx)
 
 	return c
 }
 
 func getCacheFilePath() string {
+	// Получаем текущую рабочую директорию (должна быть корень проекта)
 	wd, err := os.Getwd()
 	if err != nil {
 		log.Printf("Не удалось получить рабочую директорию: %v", err)
+		// Fallback - используем относительный путь от корня проекта
 		return "cache/today_cache.json"
 	}
+	
 	return filepath.Join(wd, "cache", "today_cache.json")
 }
 
+// Add добавляет указанное количество отжиманий
 func (c *TodayCache) Add(userID int64, count int) int {
 	c.Mu.Lock()
 	defer c.Mu.Unlock()
@@ -64,12 +73,14 @@ func (c *TodayCache) Add(userID int64, count int) int {
 	return newTotal
 }
 
+// Get возвращает текущее значение
 func (c *TodayCache) Get(userID int64) int {
 	c.Mu.RLock()
 	defer c.Mu.RUnlock()
 	return c.Items[userID]
 }
 
+// Set устанавливает значение
 func (c *TodayCache) Set(userID int64, total int) {
 	c.Mu.Lock()
 	defer c.Mu.Unlock()
@@ -78,7 +89,7 @@ func (c *TodayCache) Set(userID int64, total int) {
 }
 
 //
-// 🔥 Graceful-aware loops
+// 🔥 Фоновые циклы
 //
 
 func (c *TodayCache) autoSaveLoop(ctx context.Context) {
@@ -91,7 +102,6 @@ func (c *TodayCache) autoSaveLoop(ctx context.Context) {
 			log.Println("autoSaveLoop stopping...")
 			_ = c.Save()
 			return
-
 		case <-ticker.C:
 			c.Mu.Lock()
 			changed := c.changed
@@ -111,14 +121,14 @@ func (c *TodayCache) resetDailyLoop(ctx context.Context) {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
-	var lastDay int
+	// Инициализируем lastDay текущим днем, чтобы не сбрасывать кэш сразу
+	lastDay := time.Now().In(c.location).YearDay()
 
 	for {
 		select {
 		case <-ctx.Done():
 			log.Println("resetDailyLoop stopping...")
 			return
-
 		case <-ticker.C:
 			now := time.Now().In(c.location)
 			currentDay := now.YearDay()
@@ -129,7 +139,10 @@ func (c *TodayCache) resetDailyLoop(ctx context.Context) {
 				c.changed = true
 				c.Mu.Unlock()
 
-				_ = c.Save()
+				if err := c.Save(); err != nil {
+					log.Printf("Ошибка сохранения кэша при сбросе дня: %v", err)
+				}
+
 				log.Printf("Cache reset at %v", now)
 				lastDay = currentDay
 			}

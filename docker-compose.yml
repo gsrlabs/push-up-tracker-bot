@@ -9,8 +9,8 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       TZ: ${TIME_ZONE:-Europe/Moscow}
 
-    #ports:
-      #- "127.0.0.1:5432:5432" # for tests
+    ports:
+      - "127.0.0.1:5432:5432" # for tests
     volumes:
       - postgres_data:/var/lib/postgresql
     healthcheck:

@@ -20,5 +20,5 @@ app:
 # Test configuration (опционально)
 test:
   db_host: localhost
-  migrations_path: ./migrations
-  handler_migrations_path: ./migrations
+  migrations_path: ../migrations
+  handler_migrations_path: ../../migrations

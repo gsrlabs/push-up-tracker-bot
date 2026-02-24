@@ -1,9 +1,7 @@
 package service
 
 import (
-	"fmt"
 	"math"
-	"strings"
 )
 	
 const (
@@ -209,76 +207,4 @@ func CalculateNextTarget(currentMaxReps int) int {
         // Целесообразнее работать над другими параметрами (взрывная сила, вариации).
         return 0
     }
-}
-
-
-func GenerateProgressBar(current, total, barWidth int) string {
-	if total <= 0 || barWidth <= 0 {
-		return "Прогресс: [не определён]"
-	}
-
-	percentage := float64(current) / float64(total)
-	clamped := percentage
-	if clamped > 1 {
-		clamped = 1
-	}
-
-	filled := int(clamped * float64(barWidth))
-	if filled > barWidth {
-		filled = barWidth
-	}
-	if filled < 0 {
-		filled = 0
-	}
-	empty := barWidth - filled
-
-	bar := strings.Repeat("█", filled) + strings.Repeat("░", empty) // или  ░ ▒ ▓ █ 🪫 🔋
-	percentText := int(percentage * 100)
-
-	// Добавим бонусную метку если перевыполнил
-	suffix := ""
-	if percentage > 1 {
-		suffix = " 🏆"
-	}
-
-	return fmt.Sprintf("Прогресс за день: [%s] %d%%%s", bar, percentText, suffix)
-}
-
-// formatTimeUnit универсальная функция для склонения числительных
-func formatTimeUnit(value int, one, two, five string) string {
-    if value == 0 {
-        return ""
-    }
-    
-    lastDigit := value % 10
-    lastTwoDigits := value % 100
-    
-    // Исключения для 11-14
-    if lastTwoDigits >= 11 && lastTwoDigits <= 14 {
-        return fmt.Sprintf("%d %s", value, five)
-    }
-    
-    switch lastDigit {
-    case 1:
-        return fmt.Sprintf("%d %s", value, one)
-    case 2, 3, 4:
-        return fmt.Sprintf("%d %s", value, two)
-    default:
-        return fmt.Sprintf("%d %s", value, five)
-    }
-}
-
-// FormatTimesWord склоняет слово "раз"
-func FormatTimesWord(n int) string {
-    return formatTimeUnit(n, "раз", "раза", "раз")
-}
-
-// FormatHoursCompact склоняет слово "час"
-func FormatHoursCompact(hours int) string {
-    return formatTimeUnit(hours, "час", "часа", "часов")
-}
-
-// FormatDaysCompact склоняет слово "день"  
-func FormatDaysCompact(days int) string {
-    return formatTimeUnit(days, "день", "дня", "дней")
 }
