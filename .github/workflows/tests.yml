@@ -1,9 +1,6 @@
 name: Backend CI
 
-on:
-  push:
-    branches: [ main, dev ]
-  pull_request:
+on: [push, pull_request]
 
 jobs:
   test:
@@ -68,7 +65,7 @@ jobs:
       # -----------------------
       - name: Build application
         working-directory: ./backend
-        run: go build -v -o app-binary ./cmd/app/main.go
+        run: go build -v -o app-binary ./main.go
 
       # -----------------------
       # Wait for Postgres
