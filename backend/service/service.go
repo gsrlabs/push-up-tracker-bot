@@ -18,9 +18,7 @@ type PushupService interface {
 	SetDateCompletionOfDailyNorm(ctx context.Context, userID int64) error
 	GetDailyNorm(ctx context.Context, userID int64) (int, error)
 	UpdateMaxReps(ctx context.Context, userID int64, count int) (*presenter.MaxRepsViewModel, error)
-
 	GetMaxRepsHistory(ctx context.Context, userID int64) ([]repository.MaxRepsHistoryItem, error)
-
 	GetMaxRepsRecord(ctx context.Context, userID int64) (repository.MaxRepsHistoryItem, error)
 	ResetDailyNorm(ctx context.Context, userID int64) error
 	GetFullStat(ctx context.Context, userID int64) (*presenter.FullStatViewModel, error)
@@ -189,7 +187,6 @@ func (s *pushupService) UpdateMaxReps(
 
 // GetMaxRepsHistory возвращает историю максимальных отжиманий
 func (s *pushupService) GetMaxRepsHistory(ctx context.Context, userID int64) ([]repository.MaxRepsHistoryItem, error) {
-
 	return s.repo.GetMaxRepsHistory(ctx, userID)
 }
 

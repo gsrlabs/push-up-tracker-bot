@@ -14,7 +14,6 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-//var bot *tgbotapi.BotAPI
 
 type MockBot struct {
 	mock.Mock

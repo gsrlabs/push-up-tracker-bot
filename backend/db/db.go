@@ -16,7 +16,7 @@ import (
 
 // Database wraps the pgxpool.Pool to provide a unified database access point.
 type Database struct {
-	Pool   *pgxpool.Pool
+	Pool *pgxpool.Pool
 }
 
 // Connect establishes a connection pool to PostgreSQL using environment variables
@@ -34,7 +34,6 @@ func Connect(ctx context.Context, cfg *config.Config) (*Database, error) {
 	pgcfg.MaxConns = cfg.Database.MaxConns
 	pgcfg.MinConns = cfg.Database.MinConns
 	pgcfg.MaxConnLifetime = 30 * time.Minute
-
 
 	if cfg.Migrations.Auto {
 		if err := runMigrations(dsn, cfg.Migrations.Path, cfg.Migrations.Auto); err != nil {
@@ -55,7 +54,6 @@ func Connect(ctx context.Context, cfg *config.Config) (*Database, error) {
 	return &Database{Pool: pool}, nil
 }
 
-
 // runMigrations applies database schema changes using the goose provider
 // from the specified migrations directory.
 func runMigrations(dsn, migrationsPath string, mode bool) error {
@@ -69,7 +67,7 @@ func runMigrations(dsn, migrationsPath string, mode bool) error {
 		err := db.Close()
 		if err != nil {
 			log.Fatalf("error close database %v", err)
-			
+
 		}
 	}()
 
@@ -87,19 +85,18 @@ func runMigrations(dsn, migrationsPath string, mode bool) error {
 	return nil
 }
 
-
 func maskPassword(dsn string) string {
-    parsed, err := url.Parse(dsn)
-    if err != nil {
-        return "***invalid dsn***"
-    }
+	parsed, err := url.Parse(dsn)
+	if err != nil {
+		return "***invalid dsn***"
+	}
 
-    if parsed.User != nil {
-        username := parsed.User.Username()
-        parsed.User = url.UserPassword(username, "***")
-    }
+	if parsed.User != nil {
+		username := parsed.User.Username()
+		parsed.User = url.UserPassword(username, "***")
+	}
 
-    return parsed.String()
+	return parsed.String()
 }
 
 // GetPool returns the underlying connection pool

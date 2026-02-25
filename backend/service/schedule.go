@@ -11,12 +11,12 @@ import (
 )
 
 func SendSchedule(chatID int64, items []repository.MaxRepsHistoryItem) (bytes.Buffer, error) {
-	
+
 	points := make(plotter.XYs, len(items))
 
 	for i := range items {
 		points[i].X = float64(i + 1)
-		points[i].Y = float64(items[len(items) - 1 - i].MaxReps)
+		points[i].Y = float64(items[len(items)-1-i].MaxReps)
 	}
 
 	// Создаем график

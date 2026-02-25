@@ -102,13 +102,12 @@ func (m *MockPushupRepository) AddMaxRepsHistory(ctx context.Context, userID int
 	return args.Error(0)
 }
 
-
 func (m *MockPushupRepository) GetMaxRepsHistory(ctx context.Context, userID int64) ([]repository.MaxRepsHistoryItem, error) {
 	args := m.Called(ctx, userID)
 	if history, ok := args.Get(0).([]repository.MaxRepsHistoryItem); ok {
 		return history, args.Error(1)
 	}
-	
+
 	return nil, args.Error(1)
 }
 
@@ -316,7 +315,7 @@ func TestMock_GetMaxRepsHistory(t *testing.T) {
 	mockRepo := new(MockPushupRepository)
 
 	history := []repository.MaxRepsHistoryItem{
-		{	
+		{
 			MaxReps: 50,
 		},
 	}

@@ -1,6 +1,5 @@
 # Environment variables
 .env
-.env.*.local
 
 # Database
 database/data/
@@ -8,13 +7,9 @@ database/data/
 
 # Backup directories
 backups/
-cache/
-today_cache.json
+cache/today_cache.json
+backend/cache/cache
 
-
-# Log files
-*.log
-logs/
 
 # Documentation
 Technical specification.md

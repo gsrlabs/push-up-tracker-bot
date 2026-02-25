@@ -165,7 +165,6 @@ func (r *pushupRepository) GetTodayStat(ctx context.Context, userID int64, date 
 	return total, err
 }
 
-
 // GetUsername возвращает username пользователя
 func (r *pushupRepository) GetUsername(ctx context.Context, userID int64) (string, error) {
 	query := `SELECT username FROM users WHERE user_id = $1`

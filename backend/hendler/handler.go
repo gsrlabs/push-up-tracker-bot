@@ -142,7 +142,7 @@ func (h *BotHandler) handleMessage(update tgbotapi.Update) {
 			log.Printf("Ошибка отправки сообщения: %v", err)
 		}
 
-	case "/info", "/help":
+	case "/info", "/help", "📖 Инфо":
 		h.handleInfo(chatID)
 
 	case "📈 Мой прогресс":
@@ -154,7 +154,7 @@ func (h *BotHandler) handleMessage(update tgbotapi.Update) {
 
 		_, err := h.bot.Send(msg)
 		if err != nil {
-			log.Printf("Ошибка отправки сообщения: %v", err)
+			log.Printf("Ошибка отправки сообщения ⬅️ Назад: %v", err)
 		}
 
 	default:
@@ -164,7 +164,7 @@ func (h *BotHandler) handleMessage(update tgbotapi.Update) {
 			_, err := h.bot.Send(msg)
 
 			if err != nil {
-				log.Printf("Ошибка отправки сообщения: %v", err)
+				log.Printf("Ошибка отправки сообщения default: %v", err)
 			}
 		}
 	}
@@ -219,10 +219,7 @@ func (h *BotHandler) clearPendingInput(chatID int64) {
 	if input, ok := h.inputManager.Get(chatID); ok {
 		if input.CancelMsgID != 0 {
 			del := tgbotapi.NewDeleteMessage(chatID, input.CancelMsgID)
-			if _, err := h.bot.Send(del); err != nil {
-				log.Printf("clearPendingInput: не удалось удалить сообщение (chat=%d, msg=%d): %v",
-					chatID, input.CancelMsgID, err)
-			}
+			_, _ = h.bot.Send(del)
 		}
 	}
 
@@ -241,7 +238,7 @@ func (h *BotHandler) requestNumber(chatID int64, t inputType) {
 
 	sentMsg, err := h.bot.Send(msg)
 	if err != nil {
-		log.Printf("Ошибка отправки сообщения: %v", err)
+		log.Printf("Ошибка отправки сообщения requestNumber: %v", err)
 		return
 	}
 
@@ -255,11 +252,8 @@ func (h *BotHandler) sendCancelButton(chatID int64, inputType inputType, replyMs
 	if old, ok := h.inputManager.Get(chatID); ok {
 		if old.CancelMsgID != 0 {
 			delOld := tgbotapi.NewDeleteMessage(chatID, old.CancelMsgID)
-			_, err := h.bot.Send(delOld)
-			if err != nil {
-				log.Printf("Ошибка отправки сообщения: %v", err)
-				return
-			}
+			_, _ = h.bot.Send(delOld)
+
 		}
 	}
 
@@ -334,12 +328,12 @@ func (h *BotHandler) handleStart(ctx context.Context, chatID int64, userID int64
 	welcomeMsg := presenter.FormatWelcomeMessage(maxReps)
 
 	msg := tgbotapi.NewMessage(chatID, welcomeMsg)
-	msg.ParseMode = "Markdown"
+	msg.ParseMode = tgbotapi.ModeHTML
 
 	if maxReps == 0 {
 		_, err := h.bot.Send(msg)
 		if err != nil {
-			log.Printf("Ошибка отправки сообщения: %v", err)
+			log.Printf("Ошибка отправки сообщения handleStart: %v", err)
 			return
 		}
 		h.requestNumber(chatID, perDayLimit)
@@ -359,7 +353,7 @@ func (h *BotHandler) handleSetCustomNorm(ctx context.Context, userID int64, chat
 
 		_, err := h.bot.Send(msg)
 		if err != nil {
-			log.Printf("Ошибка отправки сообщения: %v", err)
+			log.Printf("Ошибка отправки сообщения handleSetCustomNorm(SetDailyNorm): %v", err)
 			return
 		}
 		return
@@ -368,7 +362,7 @@ func (h *BotHandler) handleSetCustomNorm(ctx context.Context, userID int64, chat
 	msg.ReplyMarkup = ui.MainKeyboard()
 	_, err = h.bot.Send(msg)
 	if err != nil {
-		log.Printf("Ошибка отправки сообщения: %v", err)
+		log.Printf("Ошибка отправки сообщения handleSetCustomNorm: %v", err)
 		return
 	}
 
@@ -401,7 +395,7 @@ func (h *BotHandler) handleProgressHistory(ctx context.Context, userID int64, ch
 
 		_, err = h.bot.Send(photo)
 		if err != nil {
-			log.Printf("Ошибка отправки сообщения: %v", err)
+			log.Printf("Ошибка отправки сообщения handleProgressHistory: %v", err)
 			return
 		}
 
@@ -422,11 +416,11 @@ func (h *BotHandler) handleCallback(update tgbotapi.Update) {
 
 		h.clearPendingInput(chatID)
 
-		// Ответ на callback (убираем "часики" у кнопки)
+		// Ответ на callback
 		cb := tgbotapi.NewCallback(callback.ID, "Ввод отменен")
 		_, err := h.bot.Request(cb)
 		if err != nil {
-			log.Printf("Ошибка отправки сообщения: %v", err)
+			log.Printf("Ошибка отправки сообщения handleInfo(NewCallback): %v", err)
 			return
 		}
 
@@ -438,7 +432,7 @@ func (h *BotHandler) handleCallback(update tgbotapi.Update) {
 		)
 		_, err = h.bot.Send(editMsg)
 		if err != nil {
-			log.Printf("Ошибка отправки сообщения: %v", err)
+			log.Printf("Ввод отменен")
 		}
 
 		// Отправляем главное меню
@@ -446,7 +440,7 @@ func (h *BotHandler) handleCallback(update tgbotapi.Update) {
 		msg.ReplyMarkup = ui.MainKeyboard()
 		_, err = h.bot.Send(msg)
 		if err != nil {
-			log.Printf("Ошибка отправки сообщения: %v", err)
+			log.Printf("Ошибка отправки сообщения handleCallback(Ввод отменен): %v", err)
 		}
 
 	}
@@ -489,14 +483,14 @@ func (h *BotHandler) sendMessage(chatID int64, text string, markup interface{}) 
 	}
 	_, err := h.bot.Send(msg)
 	if err != nil {
-		log.Printf("Ошибка отправки сообщения: %v", err)
+		log.Printf("Ошибка отправки сообщения sendMessage: %v", err)
 		return
 	}
 }
 
 func (h *BotHandler) sendMarkdownMessage(chatID int64, text string, markup interface{}) {
 	msg := tgbotapi.NewMessage(chatID, text)
-	msg.ParseMode = "Markdown"
+	msg.ParseMode = tgbotapi.ModeHTML
 	if markup != nil {
 		switch v := markup.(type) {
 		case tgbotapi.ReplyKeyboardMarkup:
@@ -509,13 +503,13 @@ func (h *BotHandler) sendMarkdownMessage(chatID int64, text string, markup inter
 	}
 	_, err := h.bot.Send(msg)
 	if err != nil {
-		log.Printf("Ошибка отправки сообщения: %v", err)
+		log.Printf("Ошибка отправки сообщения sendMarkdownMessage: %v", err)
 		return
 	}
 }
 
 func (h *BotHandler) sendError(chatID int64) {
-	h.sendMessage(chatID, "Произошла ошибка. Попробуйте позже.", ui.MainKeyboard())
+	h.sendMessage(chatID, "Произошла ошибка. Попробуйте позже или наждмите /start", ui.MainKeyboard())
 }
 
 func (h *BotHandler) sendValidationError(chatID int64, t inputType, message string) {
@@ -530,7 +524,7 @@ func (h *BotHandler) sendValidationError(chatID int64, t inputType, message stri
 
 	sentMsg, err := h.bot.Send(msg)
 	if err != nil {
-		log.Printf("Ошибка отправки сообщения: %v", err)
+		log.Printf("Ошибка отправки сообщения sendError: %v", err)
 		return
 	}
 

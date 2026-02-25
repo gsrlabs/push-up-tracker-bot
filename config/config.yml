@@ -13,12 +13,10 @@ migrations:
 
 # Application configuration
 app:
-  log_level: info
-  cache_dir: /app/cache
+  debug_mod: false
   timezone: Europe/Moscow
 
-# Test configuration (опционально)
+# Test configuration
 test:
   db_host: localhost
   migrations_path: ../migrations
-  handler_migrations_path: ../../migrations
