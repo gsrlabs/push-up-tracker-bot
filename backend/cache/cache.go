@@ -57,7 +57,7 @@ func getCacheFilePath() string {
 		// Fallback - используем относительный путь от корня проекта
 		return "cache/today_cache.json"
 	}
-	
+
 	return filepath.Join(wd, "cache", "today_cache.json")
 }
 
@@ -165,20 +165,12 @@ func (c *TodayCache) Save() error {
 		return err
 	}
 
+	// Убедимся, что директория существует перед записью
 	if err := os.MkdirAll(filepath.Dir(c.filename), 0755); err != nil {
 		return fmt.Errorf("не удалось создать директорию: %w", err)
 	}
 
-	tmp := c.filename + ".tmp"
-	if err := os.WriteFile(tmp, data, 0644); err != nil {
-		return err
-	}
-
-	if err := os.Rename(tmp, c.filename); err != nil {
-		return err
-	}
-
-	return nil
+	return os.WriteFile(c.filename, data, 0644)
 }
 
 func (c *TodayCache) Load() error {

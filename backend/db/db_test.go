@@ -11,7 +11,6 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/stretchr/testify/assert"
-
 )
 
 func getTestConfig(t *testing.T) *config.Config {
@@ -68,24 +67,23 @@ func getTestConfig(t *testing.T) *config.Config {
 	migrationPath := cfg.Test.MigrationsPath
 
 	if migrationPath == "" {
-			migrationPaths := []string{
-		"../../../backend/migrations",
-		"../../backend/migrations",
-		"../backend/migrations",
-		"../../migrations",
-		"../migrations",
-		"./migrations",
-	}
+		migrationPaths := []string{
+			"../../../backend/migrations",
+			"../../backend/migrations",
+			"../backend/migrations",
+			"../../migrations",
+			"../migrations",
+			"./migrations",
+		}
 
-	for _, p := range migrationPaths {
-		if _, err := os.Stat(p); err == nil {
-			migrationPath = p
-			log.Printf("INFO: using migrations from %s", p)
-			break
+		for _, p := range migrationPaths {
+			if _, err := os.Stat(p); err == nil {
+				migrationPath = p
+				log.Printf("INFO: using migrations from %s", p)
+				break
+			}
 		}
 	}
-	}
-
 
 	if migrationPath == "" {
 		panic("migrations directory not found")

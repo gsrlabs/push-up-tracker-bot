@@ -40,14 +40,13 @@ type MigrationConfig struct {
 }
 
 type AppConfig struct {
-	CacheDir string `mapstructure:"cache_dir"`
+	DebugMod bool   `mapstructure:"debug_mode"`
 	Timezone string `mapstructure:"timezone"`
 }
 
 type TestConfig struct {
-	DBHost                string `mapstructure:"db_host"`
-	MigrationsPath        string `mapstructure:"migrations_path"`
-	HandlerMigrationsPath string `mapstructure:"handler_migrations_path"`
+	DBHost         string `mapstructure:"db_host"`
+	MigrationsPath string `mapstructure:"migrations_path"`
 }
 
 func Load(path string) (*Config, error) {
@@ -65,7 +64,6 @@ func Load(path string) (*Config, error) {
 	_ = v.BindEnv("database.user", "DB_USER")
 	_ = v.BindEnv("database.name", "DB_NAME")
 	_ = v.BindEnv("app.timezone", "TIME_ZONE")
-
 
 	if err := v.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
@@ -165,14 +163,14 @@ func GetConfig() (*Config, error) {
 
 	// Возможные пути для поиска
 	configPaths := []string{
-		"/config/config.yml",           // Docker
-		"../../../config/config.yml",    // Глубоко в структуре
-		"../../config/config.yml",       // На уровень глубже
-		"../config/config.yml",          // В родительской директории
-		"./config/config.yml",           // В текущей директории
-		"config/config.yml",              // Относительный путь
-		"./config.yaml",                  // YAML в текущей
-		"config.yaml",                     // YAML относительно
+		"/config/config.yml",         // Docker
+		"../../../config/config.yml", // Глубоко в структуре
+		"../../config/config.yml",    // На уровень глубже
+		"../config/config.yml",       // В родительской директории
+		"./config/config.yml",        // В текущей директории
+		"config/config.yml",          // Относительный путь
+		"./config.yaml",              // YAML в текущей
+		"config.yaml",                // YAML относительно
 	}
 
 	var lastErr error

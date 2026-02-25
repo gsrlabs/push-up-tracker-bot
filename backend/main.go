@@ -2,7 +2,6 @@ package main // Объявляем пакет main - точка входа в п
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -10,10 +9,10 @@ import (
 	"syscall"
 	"time"
 
-	"trackerbot/hendler"
 	"trackerbot/cache"
 	"trackerbot/config"
 	"trackerbot/db"
+	"trackerbot/hendler"
 	"trackerbot/repository"
 	"trackerbot/service"
 
@@ -21,7 +20,6 @@ import (
 )
 
 func main() {
-
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -31,7 +29,7 @@ func main() {
 
 	go func() {
 		<-sigChan
-		log.Println("Received shutdown signal")
+		log.Println("received shutdown signal")
 		cancel()
 	}()
 
@@ -56,9 +54,6 @@ func main() {
 		log.Fatal("❌ TELEGRAM_BOT_TOKEN is not set")
 	}
 
-	fmt.Println(botToken)
-
-
 	telegramBot, err := tgbotapi.NewBotAPI(botToken)
 	if err != nil {
 		log.Fatalf("❌ Failed to create bot: %v", err)
@@ -70,11 +65,10 @@ func main() {
 
 	log.Println("✅ Бот успешно подключен")
 
-	telegramBot.Debug = true
+	telegramBot.Debug = cfg.App.DebugMod
 
 	log.Printf("Авторизован как %s", telegramBot.Self.UserName)
 
-	// DB
 	db, err := db.Connect(ctx, cfg)
 	if err != nil {
 		log.Panicf("Unable to connect to database: %v\n", err)
@@ -93,7 +87,6 @@ func main() {
 	u.Timeout = 60
 
 	updates := telegramBot.GetUpdatesChan(u)
-
 
 	var wg sync.WaitGroup
 
