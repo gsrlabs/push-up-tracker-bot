@@ -5,8 +5,7 @@ import (
 	"context"
 	"strconv"
 	"testing"
-	"trackerbot/presenter"
-	"trackerbot/repository"
+	"trackerbot/model"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/stretchr/testify/assert"
@@ -43,10 +42,10 @@ func (m *MockService) EnsureUser(ctx context.Context, userID int64, username str
 	return args.Error(0)
 }
 
-func (m *MockService) AddPushups(ctx context.Context, userID int64, count int) (*presenter.AddPushupsViewModel, error) {
+func (m *MockService) AddPushups(ctx context.Context, userID int64, count int) (*model.AddPushupsViewModel, error) {
 	args := m.Called(ctx, userID, count)
 
-	if vm, ok := args.Get(0).(*presenter.AddPushupsViewModel); ok {
+	if vm, ok := args.Get(0).(*model.AddPushupsViewModel); ok {
 		return vm, args.Error(1)
 	}
 	return nil, args.Error(1)
@@ -67,31 +66,31 @@ func (m *MockService) GetDailyNorm(ctx context.Context, userID int64) (int, erro
 	return args.Int(0), args.Error(1)
 }
 
-func (m *MockService) UpdateMaxReps(ctx context.Context, userID int64, count int) (*presenter.MaxRepsViewModel, error) {
+func (m *MockService) UpdateMaxReps(ctx context.Context, userID int64, count int) (*model.MaxRepsViewModel, error) {
 	args := m.Called(ctx, userID, count)
 
-	if vm, ok := args.Get(0).(*presenter.MaxRepsViewModel); ok {
+	if vm, ok := args.Get(0).(*model.MaxRepsViewModel); ok {
 		return vm, args.Error(1)
 	}
 	return nil, args.Error(1)
 }
 
-func (m *MockService) GetMaxRepsHistory(ctx context.Context, userID int64) ([]repository.MaxRepsHistoryItem, error) {
+func (m *MockService) GetMaxRepsHistory(ctx context.Context, userID int64) ([]model.MaxRepsHistoryItem, error) {
 	args := m.Called(ctx, userID)
 
-	if history, ok := args.Get(0).([]repository.MaxRepsHistoryItem); ok {
+	if history, ok := args.Get(0).([]model.MaxRepsHistoryItem); ok {
 		return history, args.Error(1)
 	}
 	return nil, args.Error(1)
 }
 
-func (m *MockService) GetMaxRepsRecord(ctx context.Context, userID int64) (repository.MaxRepsHistoryItem, error) {
+func (m *MockService) GetMaxRepsRecord(ctx context.Context, userID int64) (model.MaxRepsHistoryItem, error) {
 	args := m.Called(ctx, userID)
 
-	if record, ok := args.Get(0).(repository.MaxRepsHistoryItem); ok {
+	if record, ok := args.Get(0).(model.MaxRepsHistoryItem); ok {
 		return record, args.Error(1)
 	}
-	return repository.MaxRepsHistoryItem{}, args.Error(1)
+	return model.MaxRepsHistoryItem{}, args.Error(1)
 }
 
 func (m *MockService) ResetDailyNorm(ctx context.Context, userID int64) error {
@@ -99,10 +98,10 @@ func (m *MockService) ResetDailyNorm(ctx context.Context, userID int64) error {
 	return args.Error(0)
 }
 
-func (m *MockService) GetFullStat(ctx context.Context, userID int64) (*presenter.FullStatViewModel, error) {
+func (m *MockService) GetFullStat(ctx context.Context, userID int64) (*model.FullStatViewModel, error) {
 	args := m.Called(ctx, userID)
 
-	if vm, ok := args.Get(0).(*presenter.FullStatViewModel); ok {
+	if vm, ok := args.Get(0).(*model.FullStatViewModel); ok {
 		return vm, args.Error(1)
 	}
 	return nil, args.Error(1)
@@ -126,7 +125,7 @@ func (m *MockService) CheckNormCompletion(ctx context.Context) (bool, string) {
 func (m *MockService) BuildSchedule(
 	ctx context.Context,
 	userID int64,
-	history []repository.MaxRepsHistoryItem,
+	history []model.MaxRepsHistoryItem,
 ) (bytes.Buffer, error) {
 
 	args := m.Called(ctx, userID, history)
@@ -150,7 +149,7 @@ func TestHandleAddPushups(t *testing.T) {
 		numericConfigs: make(map[inputType]numericConfig),
 	}
 
-	vm := &presenter.AddPushupsViewModel{
+	vm := &model.AddPushupsViewModel{
 		AddedCount: 10,
 		Total:      50,
 		DailyNorm:  100,
@@ -184,7 +183,7 @@ func TestHandleSetMaxReps(t *testing.T) {
 		numericConfigs: make(map[inputType]numericConfig),
 	}
 
-	vm := &presenter.MaxRepsViewModel{
+	vm := &model.MaxRepsViewModel{
 		Count:     50,
 		DailyNorm: 150,
 	}
@@ -235,7 +234,7 @@ func TestHandleFullStat(t *testing.T) {
 
 	handler := NewBotHandler(mockBot, mockService)
 
-	vm := &presenter.FullStatViewModel{
+	vm := &model.FullStatViewModel{
 		TodayTotal:   20,
 		TotalAllTime: 200,
 	}
@@ -312,7 +311,7 @@ func TestHandleProgressHistory(t *testing.T) {
 	chatID := int64(123)
 	userID := int64(1)
 
-	history := []repository.MaxRepsHistoryItem{
+	history := []model.MaxRepsHistoryItem{
 		{MaxReps: 10}, {MaxReps: 20},
 	}
 	fakeImage := []byte("fake image")
@@ -390,10 +389,10 @@ func TestHandlePendingInput_AllCases(t *testing.T) {
 				switch tt.inputType {
 				case inputDayLimit:
 					mockService.On("AddPushups", ctx, userID, mock.Anything).Return(
-						&presenter.AddPushupsViewModel{AddedCount: 100, Total: 100, DailyNorm: 150}, nil)
+						&model.AddPushupsViewModel{AddedCount: 100, Total: 100, DailyNorm: 150}, nil)
 				case inputTypeMaxReps:
 					mockService.On("UpdateMaxReps", ctx, userID, mock.Anything).Return(
-						&presenter.MaxRepsViewModel{Count: 50, Rank: "🏹 Адепт упорства"}, nil)
+						&model.MaxRepsViewModel{Count: 50, Rank: "🏹 Адепт упорства"}, nil)
 				case inputTypeCustomNorm:
 					mockService.On("SetDailyNorm", ctx, userID, mock.Anything).Return(nil)
 				}

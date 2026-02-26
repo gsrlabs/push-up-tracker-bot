@@ -3,14 +3,14 @@ package service
 import (
 	"bytes"
 	"log"
-	"trackerbot/repository"
+	"trackerbot/model"
 
 	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"
 	"gonum.org/v1/plot/vg"
 )
 
-func SendSchedule(chatID int64, items []repository.MaxRepsHistoryItem) (bytes.Buffer, error) {
+func SendSchedule(chatID int64, items []model.MaxRepsHistoryItem) (bytes.Buffer, error) {
 
 	points := make(plotter.XYs, len(items))
 

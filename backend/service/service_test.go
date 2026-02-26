@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"trackerbot/repository"
+	"trackerbot/model"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
@@ -31,14 +31,14 @@ func (m *MockPushupRepository) EnsureUser(ctx context.Context, userID int64, use
 	return args.Error(0)
 }
 
-func (m *MockPushupRepository) AddPushups(ctx context.Context, userID int64, date time.Time, count int) (int,error) {
+func (m *MockPushupRepository) AddPushups(ctx context.Context, userID int64, date time.Time, count int) (int, error) {
 	args := m.Called(ctx, userID, date, count)
 	return args.Int(0), args.Error(1)
 }
 
-func (m *MockPushupRepository) GetFullStat(ctx context.Context, userID int64, date time.Time) (*repository.FullStatData, error) {
+func (m *MockPushupRepository) GetFullStat(ctx context.Context, userID int64, date time.Time) (*model.FullStatViewModel, error) {
 	args := m.Called(ctx, userID, date)
-	if data, ok := args.Get(0).(*repository.FullStatData); ok {
+	if data, ok := args.Get(0).(*model.FullStatViewModel); ok {
 		return data, args.Error(1)
 	}
 	return nil, args.Error(1)
@@ -102,21 +102,21 @@ func (m *MockPushupRepository) AddMaxRepsHistory(ctx context.Context, userID int
 	return args.Error(0)
 }
 
-func (m *MockPushupRepository) GetMaxRepsHistory(ctx context.Context, userID int64) ([]repository.MaxRepsHistoryItem, error) {
+func (m *MockPushupRepository) GetMaxRepsHistory(ctx context.Context, userID int64) ([]model.MaxRepsHistoryItem, error) {
 	args := m.Called(ctx, userID)
-	if history, ok := args.Get(0).([]repository.MaxRepsHistoryItem); ok {
+	if history, ok := args.Get(0).([]model.MaxRepsHistoryItem); ok {
 		return history, args.Error(1)
 	}
 
 	return nil, args.Error(1)
 }
 
-func (m *MockPushupRepository) GetMaxRepsRecord(ctx context.Context, userID int64) (repository.MaxRepsHistoryItem, error) {
+func (m *MockPushupRepository) GetMaxRepsRecord(ctx context.Context, userID int64) (model.MaxRepsHistoryItem, error) {
 	args := m.Called(ctx, userID)
-	if record, ok := args.Get(0).(repository.MaxRepsHistoryItem); ok {
+	if record, ok := args.Get(0).(model.MaxRepsHistoryItem); ok {
 		return record, args.Error(1)
 	}
-	return repository.MaxRepsHistoryItem{}, args.Error(1)
+	return model.MaxRepsHistoryItem{}, args.Error(1)
 }
 
 func TestService_EnsureUser(t *testing.T) {
@@ -315,7 +315,7 @@ func TestMock_AddMaxRepsHistory(t *testing.T) {
 func TestMock_GetMaxRepsHistory(t *testing.T) {
 	mockRepo := new(MockPushupRepository)
 
-	history := []repository.MaxRepsHistoryItem{
+	history := []model.MaxRepsHistoryItem{
 		{
 			MaxReps: 50,
 		},
@@ -337,7 +337,7 @@ func TestMock_GetMaxRepsHistory(t *testing.T) {
 func TestMock_GetMaxRepsRecord(t *testing.T) {
 	mockRepo := new(MockPushupRepository)
 
-	record := repository.MaxRepsHistoryItem{
+	record := model.MaxRepsHistoryItem{
 		MaxReps: 100,
 	}
 

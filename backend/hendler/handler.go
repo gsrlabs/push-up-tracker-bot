@@ -459,6 +459,7 @@ func (h *BotHandler) handleFullStat(
 		return
 	}
 
+
 	response := presenter.FormatFullStat(vm)
 
 	msg := tgbotapi.NewMessage(chatID, response)
@@ -509,7 +510,7 @@ func (h *BotHandler) sendMarkdownMessage(chatID int64, text string, markup inter
 }
 
 func (h *BotHandler) sendError(chatID int64) {
-	h.sendMessage(chatID, "Произошла ошибка. Попробуйте позже или наждмите /start", ui.MainKeyboard())
+	h.sendMessage(chatID, "Произошла ошибка. Попробуйте позже или нажмите /start", ui.MainKeyboard())
 }
 
 func (h *BotHandler) sendValidationError(chatID int64, t inputType, message string) {
