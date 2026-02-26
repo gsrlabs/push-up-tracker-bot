@@ -6,25 +6,25 @@ import (
 	"fmt"
 
 	"time"
-	"trackerbot/presenter"
+	"trackerbot/model"
 	"trackerbot/repository"
 )
 
 type PushupService interface {
 	EnsureUser(ctx context.Context, userID int64, username string) error
-	AddPushups(ctx context.Context, userID int64, count int) (*presenter.AddPushupsViewModel, error)
+	AddPushups(ctx context.Context, userID int64, count int) (*model.AddPushupsViewModel, error)
 	SetDailyNorm(ctx context.Context, userID int64, dailyNorm int) error
 	SetDateCompletionOfDailyNorm(ctx context.Context, userID int64) error
 	GetDailyNorm(ctx context.Context, userID int64) (int, error)
-	UpdateMaxReps(ctx context.Context, userID int64, count int) (*presenter.MaxRepsViewModel, error)
-	GetMaxRepsHistory(ctx context.Context, userID int64) ([]repository.MaxRepsHistoryItem, error)
-	GetMaxRepsRecord(ctx context.Context, userID int64) (repository.MaxRepsHistoryItem, error)
+	UpdateMaxReps(ctx context.Context, userID int64, count int) (*model.MaxRepsViewModel, error)
+	GetMaxRepsHistory(ctx context.Context, userID int64) ([]model.MaxRepsHistoryItem, error)
+	GetMaxRepsRecord(ctx context.Context, userID int64) (model.MaxRepsHistoryItem, error)
 	ResetDailyNorm(ctx context.Context, userID int64) error
-	GetFullStat(ctx context.Context, userID int64) (*presenter.FullStatViewModel, error)
+	GetFullStat(ctx context.Context, userID int64) (*model.FullStatViewModel, error)
 	GetUserMaxReps(ctx context.Context, userID int64) (int, error)
 	GetFirstWorkoutDate(ctx context.Context, userID int64) (string, error)
 	CheckNormCompletion(ctx context.Context) (bool, string)
-	BuildSchedule(ctx context.Context, userID int64, history []repository.MaxRepsHistoryItem) (bytes.Buffer, error)
+	BuildSchedule(ctx context.Context, userID int64, history []model.MaxRepsHistoryItem) (bytes.Buffer, error)
 
 }
 
@@ -33,31 +33,7 @@ type pushupService struct {
 	location *time.Location
 }
 
-type AddPushupsResult struct {
-	TotalToday        int
-	DailyNorm         int
-	NormJustCompleted bool
-	HasLeader         bool
-	LeaderName        string
-	ResponseText      string
-}
 
-type UpdateMaxRepsResult struct {
-	DailyNorm    int
-	ResponseText string
-}
-
-type FullStatResult struct {
-	ResponseText string
-}
-
-type FullStatViewModel struct {
-	TodayTotal       int
-	TotalAllTime     int
-	DailyNorm        int
-	FirstWorkoutDate *time.Time
-	Leaderboard      []repository.LeaderboardItem
-}
 
 func NewPushupService(repo repository.PushupRepository, location *time.Location) PushupService {
 	return &pushupService{
@@ -84,7 +60,7 @@ func (s *pushupService) AddPushups(
 	ctx context.Context,
 	userID int64,
 	count int,
-) (*presenter.AddPushupsViewModel, error) {
+) (*model.AddPushupsViewModel, error) {
 
 	today := s.today()
 
@@ -111,7 +87,7 @@ func (s *pushupService) AddPushups(
 	}
 
 	// --- Формируем ViewModel ---
-	vm := &presenter.AddPushupsViewModel{
+	vm := &model.AddPushupsViewModel{
 		AddedCount: count,
 		Total:      totalToday,
 		DailyNorm:  dailyNorm,
@@ -139,7 +115,7 @@ func (s *pushupService) UpdateMaxReps(
 	ctx context.Context,
 	userID int64,
 	count int,
-) (*presenter.MaxRepsViewModel, error) {
+) (*model.MaxRepsViewModel, error) {
 
 	// 1. Сохраняем max reps и историю
 	if err := s.repo.SetMaxReps(ctx, userID, count); err != nil {
@@ -166,7 +142,7 @@ func (s *pushupService) UpdateMaxReps(
 	}
 
 	// 4. Формируем ViewModel
-	vm := &presenter.MaxRepsViewModel{
+	vm := &model.MaxRepsViewModel{
 		Count:      count,
 		DailyNorm:  dailyNorm,
 		History:    history,
@@ -179,12 +155,12 @@ func (s *pushupService) UpdateMaxReps(
 }
 
 // GetMaxRepsHistory возвращает историю максимальных отжиманий
-func (s *pushupService) GetMaxRepsHistory(ctx context.Context, userID int64) ([]repository.MaxRepsHistoryItem, error) {
+func (s *pushupService) GetMaxRepsHistory(ctx context.Context, userID int64) ([]model.MaxRepsHistoryItem, error) {
 	return s.repo.GetMaxRepsHistory(ctx, userID)
 }
 
 // GetMaxRepsHistory возвращает рекорд максимальных отжиманий
-func (s *pushupService) GetMaxRepsRecord(ctx context.Context, userID int64) (repository.MaxRepsHistoryItem, error) {
+func (s *pushupService) GetMaxRepsRecord(ctx context.Context, userID int64) (model.MaxRepsHistoryItem, error) {
 	return s.repo.GetMaxRepsRecord(ctx, userID)
 }
 
@@ -195,7 +171,7 @@ func (s *pushupService) ResetDailyNorm(ctx context.Context, userID int64) error 
 func (s *pushupService) GetFullStat(
 	ctx context.Context,
 	userID int64,
-) (*presenter.FullStatViewModel, error) {
+) (*model.FullStatViewModel, error) {
 
 	today := s.today()
 
@@ -204,7 +180,7 @@ func (s *pushupService) GetFullStat(
 		return nil, err
 	}
 
-	vm := &presenter.FullStatViewModel{
+	vm := &model.FullStatViewModel{
 		TodayTotal:       data.TodayTotal,
 		TotalAllTime:     data.TotalAllTime,
 		DailyNorm:        data.DailyNorm,
@@ -212,7 +188,7 @@ func (s *pushupService) GetFullStat(
 	}
 
 	for _, item := range data.Leaderboard {
-		vm.Leaderboard = append(vm.Leaderboard, presenter.LeaderboardItem{
+		vm.Leaderboard = append(vm.Leaderboard, model.LeaderboardItem{
 			Username: item.Username,
 			Count:    item.Count,
 		})
@@ -252,7 +228,7 @@ func (s *pushupService) CheckNormCompletion(ctx context.Context) (bool, string) 
 
 func (s *pushupService) BuildSchedule(ctx context.Context,
 	userID int64,
-	history []repository.MaxRepsHistoryItem,
+	history []model.MaxRepsHistoryItem,
 ) (bytes.Buffer, error) {
 
 	imageBytes, err := SendSchedule(userID, history)

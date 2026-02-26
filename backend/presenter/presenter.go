@@ -3,40 +3,10 @@ package presenter
 import (
 	"fmt"
 	"strings"
-	"time"
-	"trackerbot/repository"
+
+	"trackerbot/model"
 )
 
-type LeaderboardItem struct {
-	Username string
-	Count    int
-}
-
-type FullStatViewModel struct {
-	TodayTotal       int
-	TotalAllTime     int
-	DailyNorm        int
-	FirstWorkoutDate *time.Time
-	Leaderboard      []LeaderboardItem
-}
-
-type AddPushupsViewModel struct {
-	AddedCount int
-	Total      int
-	DailyNorm  int
-	Completed  bool
-	HasLeader  bool
-	Leader     string
-}
-
-type MaxRepsViewModel struct {
-	Count      int
-	DailyNorm  int
-	Rank       string
-	RepsToNext int
-	History    []repository.MaxRepsHistoryItem
-	Record     *repository.MaxRepsHistoryItem
-}
 
 func FormatWelcomeMessage(maxReps int) string {
 	baseMsg := `👋 <b>Добро пожаловать в PushUpper!</b>
@@ -149,7 +119,7 @@ func FormatInfoMessage() string {
 ⚠️ <i>6–7 раз в неделю допустимо только при хорошем восстановлении и без боли в суставах</i>`
 }
 
-func FormatFullStat(vm *FullStatViewModel) string {
+func FormatFullStat(vm *model.FullStatViewModel) string {
 
 	var builder strings.Builder
 
@@ -207,7 +177,7 @@ func FormatFullStat(vm *FullStatViewModel) string {
 	return builder.String()
 }
 
-func FormatAddPushups(vm *AddPushupsViewModel) string {
+func FormatAddPushups(vm *model.AddPushupsViewModel) string {
 
 	var builder strings.Builder
 
@@ -239,7 +209,7 @@ func FormatAddPushups(vm *AddPushupsViewModel) string {
 	return builder.String()
 }
 
-func FormatMaxReps(vm *MaxRepsViewModel) string {
+func FormatMaxReps(vm *model.MaxRepsViewModel) string {
 	var builder strings.Builder
 
 	_, _ = fmt.Fprintf(
@@ -304,7 +274,7 @@ func FormatMaxReps(vm *MaxRepsViewModel) string {
 	return builder.String()
 }
 
-func FormatProgressHistory(history []repository.MaxRepsHistoryItem) string {
+func FormatProgressHistory(history []model.MaxRepsHistoryItem) string {
 	if len(history) == 0 {
 		return "📊 История прогресса пуста.\nИспользуй \"🎯 Тест максимальных отжиманий\", чтобы начать отслеживать прогресс!"
 	}

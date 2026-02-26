@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"time"
+	"trackerbot/model"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -16,7 +17,7 @@ type PushupRepository interface {
 	Pool() *pgxpool.Pool
 	EnsureUser(ctx context.Context, userID int64, username string) error
 	AddPushups(ctx context.Context, userID int64, date time.Time, count int) (int, error)
-	GetFullStat(ctx context.Context, userID int64, date time.Time) (*FullStatData, error)
+	GetFullStat(ctx context.Context, userID int64, date time.Time) (*model.FullStatViewModel, error)
 	GetTodayStat(ctx context.Context, userID int64, date time.Time) (int, error)
 	GetUsername(ctx context.Context, userID int64) (string, error)
 	SetMaxReps(ctx context.Context, userID int64, count int) error
@@ -28,33 +29,16 @@ type PushupRepository interface {
 	GetFirstWorkoutDate(ctx context.Context, userID int64) (time.Time, error)
 	GetFirstNormCompleter(ctx context.Context, date time.Time) (int64, error)
 	AddMaxRepsHistory(ctx context.Context, userID int64, maxReps int) error
-	GetMaxRepsHistory(ctx context.Context, userID int64) ([]MaxRepsHistoryItem, error)
-	GetMaxRepsRecord(ctx context.Context, userID int64) (MaxRepsHistoryItem, error)
+	GetMaxRepsHistory(ctx context.Context, userID int64) ([]model.MaxRepsHistoryItem, error)
+	GetMaxRepsRecord(ctx context.Context, userID int64) (model.MaxRepsHistoryItem, error)
 }
 
 // PushupRepository предоставляет методы для работы с данными отжиманий в БД
 type pushupRepository struct {
 	pool *pgxpool.Pool // Пул соединений с PostgreSQL
+
 }
 
-type LeaderboardItem struct {
-	Rank     int // Будет добавляться в сервисе
-	Username string
-	Count    int
-}
-
-type FullStatData struct {
-	TodayTotal       int
-	TotalAllTime     int
-	DailyNorm        int
-	FirstWorkoutDate *time.Time
-	Leaderboard      []LeaderboardItem
-}
-
-type MaxRepsHistoryItem struct {
-	Date    time.Time
-	MaxReps int
-}
 
 // NewPushupRepository создает новый экземпляр репозитория
 func NewPushupRepository(pool *pgxpool.Pool) PushupRepository {
@@ -110,7 +94,7 @@ func (r *pushupRepository) GetFullStat(
 	ctx context.Context,
 	userID int64,
 	date time.Time,
-) (*FullStatData, error) {
+) (*model.FullStatViewModel, error) {
 
 	query := `
 WITH user_stats AS (
@@ -149,10 +133,11 @@ LEFT JOIN leaderboard lb ON true
 WHERE u.user_id = $1;
 	`
 
-	var result FullStatData
+	var result model.FullStatViewModel
 	var leaderboardJSON []byte
+	dateToday := date.Truncate(24 * time.Hour)
 
-	err := r.pool.QueryRow(ctx, query, userID, date).
+	err := r.pool.QueryRow(ctx, query, userID, dateToday).
 		Scan(
 			&result.TodayTotal,
 			&result.TotalAllTime,
@@ -164,6 +149,8 @@ WHERE u.user_id = $1;
 	if err != nil {
 		return nil, err
 	}
+
+	
 
 	if len(leaderboardJSON) > 0 {
 		if err := json.Unmarshal(leaderboardJSON, &result.Leaderboard); err != nil {
@@ -297,7 +284,7 @@ func (r *pushupRepository) AddMaxRepsHistory(ctx context.Context, userID int64, 
 }
 
 // GetMaxRepsHistory возвращает историю об отжиманий за подход пользователя
-func (r *pushupRepository) GetMaxRepsHistory(ctx context.Context, userID int64) ([]MaxRepsHistoryItem, error) {
+func (r *pushupRepository) GetMaxRepsHistory(ctx context.Context, userID int64) ([]model.MaxRepsHistoryItem, error) {
 	query := `
     SELECT date, max_reps 
     FROM max_reps_history 
@@ -311,9 +298,9 @@ func (r *pushupRepository) GetMaxRepsHistory(ctx context.Context, userID int64) 
 	}
 	defer rows.Close()
 
-	var history []MaxRepsHistoryItem
+	var history []model.MaxRepsHistoryItem
 	for rows.Next() {
-		var item MaxRepsHistoryItem
+		var item model.MaxRepsHistoryItem
 		if err := rows.Scan(&item.Date, &item.MaxReps); err != nil {
 			return nil, err
 		}
@@ -322,7 +309,7 @@ func (r *pushupRepository) GetMaxRepsHistory(ctx context.Context, userID int64) 
 	return history, nil
 }
 
-func (r *pushupRepository) GetMaxRepsRecord(ctx context.Context, userID int64) (MaxRepsHistoryItem, error) {
+func (r *pushupRepository) GetMaxRepsRecord(ctx context.Context, userID int64) (model.MaxRepsHistoryItem, error) {
 	query := `
     SELECT date, max_reps 
 	FROM max_reps_history 
@@ -330,11 +317,11 @@ func (r *pushupRepository) GetMaxRepsRecord(ctx context.Context, userID int64) (
 	ORDER BY max_reps DESC, date DESC 
 	LIMIT 1`
 
-	var maxRepsRecord MaxRepsHistoryItem
+	var maxRepsRecord model.MaxRepsHistoryItem
 
 	err := r.pool.QueryRow(ctx, query, userID).Scan(&maxRepsRecord.Date, &maxRepsRecord.MaxReps)
 	if err != nil {
-		return MaxRepsHistoryItem{}, err
+		return model.MaxRepsHistoryItem{}, err
 	}
 
 	return maxRepsRecord, nil
