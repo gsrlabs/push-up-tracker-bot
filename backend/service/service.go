@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"time"
-	"trackerbot/cache"
 	"trackerbot/presenter"
 	"trackerbot/repository"
 )
@@ -26,12 +25,11 @@ type PushupService interface {
 	GetFirstWorkoutDate(ctx context.Context, userID int64) (string, error)
 	CheckNormCompletion(ctx context.Context) (bool, string)
 	BuildSchedule(ctx context.Context, userID int64, history []repository.MaxRepsHistoryItem) (bytes.Buffer, error)
-	DebugCache() *cache.TodayCache
+
 }
 
 type pushupService struct {
 	repo     repository.PushupRepository
-	cache    *cache.TodayCache
 	location *time.Location
 }
 
@@ -61,10 +59,9 @@ type FullStatViewModel struct {
 	Leaderboard      []repository.LeaderboardItem
 }
 
-func NewPushupService(repo repository.PushupRepository, cache *cache.TodayCache, location *time.Location) PushupService {
+func NewPushupService(repo repository.PushupRepository, location *time.Location) PushupService {
 	return &pushupService{
 		repo:     repo,
-		cache:    cache,
 		location: location,
 	}
 }
@@ -97,18 +94,14 @@ func (s *pushupService) AddPushups(
 		return nil, err
 	}
 
-	// --- Инициализируем кэш, если пустой ---
-	if s.cache.Get(userID) == 0 {
-		dbTotal, _ := s.repo.GetTodayStat(ctx, userID, today)
-		s.cache.Set(userID, dbTotal)
-	}
 
 	// --- Добавляем отжимания ---
-	if err := s.repo.AddPushups(ctx, userID, today, count); err != nil {
+
+	totalToday, err := s.repo.AddPushups(ctx, userID, today, count)
+	if err != nil {
 		return nil, fmt.Errorf("ошибка сохранения в БД: %w", err)
 	}
 
-	totalToday := s.cache.Add(userID, count)
 
 	// --- Проверяем выполнение дневной нормы ---
 	hasCompleted, firstCompleter := s.CheckNormCompletion(ctx)
@@ -270,6 +263,3 @@ func (s *pushupService) BuildSchedule(ctx context.Context,
 	return imageBytes, nil
 }
 
-func (s *pushupService) DebugCache() *cache.TodayCache {
-	return s.cache
-}

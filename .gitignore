@@ -7,9 +7,6 @@ database/data/
 
 # Backup directories
 backups/
-cache/today_cache.json
-backend/cache/cache
-
 
 # Documentation
 Technical specification.md

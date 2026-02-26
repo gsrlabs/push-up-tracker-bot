@@ -2,7 +2,7 @@
 
 link: https://t.me/PushUpTracker_bot
 
-Telegram-бот для учёта ежедневных отжиманий с персонализированной системой расчёта нагрузки, историей прогресса и рейтингом пользователей.
+Telegram-бот для учёта отжиманий с персонализированной системой расчёта нагрузки, историей прогресса и рейтингом пользователей.
 
 Проект реализован как production-ориентированное Go-приложение с PostgreSQL, Docker, CI и тестированием.
 
@@ -59,7 +59,6 @@ backend/
 ├── service           # бизнес-логика
 ├── repository        # работа с БД
 ├── presenter         # форматирование ответов
-├── cache             # in-memory + file cache
 ├── migrations        # goose миграции
 ```
 
@@ -85,17 +84,6 @@ PostgreSQL 18
 
 ---
 
-## ⚡ Кэширование
-
-Реализован собственный `TodayCache`:
-
-* In-memory хранение текущих данных
-* Автосохранение в файл
-* Автоматический сброс при смене дня
-* Graceful shutdown через context
-* Thread-safe (sync.RWMutex)
-
----
 
 ## 🧪 Тестирование
 
@@ -132,7 +120,6 @@ Workflow включает:
 
 * PostgreSQL контейнер
 * Bot контейнер
-* Volume для кэша
 * Healthcheck БД
 * Environment configuration
 
@@ -172,7 +159,6 @@ TIME_ZONE=
 
 ## 📌 Возможные улучшения
 
-* Redis кэш
 * Метрики (Prometheus)
 * OpenTelemetry
 * CD pipeline
