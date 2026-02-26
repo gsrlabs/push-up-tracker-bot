@@ -7,7 +7,6 @@
 
 # Database and data
 backups/
-cache/
 
 # Documentation
 README.md

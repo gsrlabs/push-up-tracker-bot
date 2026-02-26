@@ -15,7 +15,7 @@ import (
 type PushupRepository interface {
 	Pool() *pgxpool.Pool
 	EnsureUser(ctx context.Context, userID int64, username string) error
-	AddPushups(ctx context.Context, userID int64, date time.Time, count int) error
+	AddPushups(ctx context.Context, userID int64, date time.Time, count int) (int, error)
 	GetFullStat(ctx context.Context, userID int64, date time.Time) (*FullStatData, error)
 	GetTodayStat(ctx context.Context, userID int64, date time.Time) (int, error)
 	GetUsername(ctx context.Context, userID int64) (string, error)
@@ -78,15 +78,32 @@ func (r *pushupRepository) EnsureUser(ctx context.Context, userID int64, usernam
 	return err
 }
 
-func (r *pushupRepository) AddPushups(ctx context.Context, userID int64, date time.Time, count int) error {
+func (r *pushupRepository) AddPushups(
+	ctx context.Context,
+	userID int64,
+	date time.Time,
+	count int,
+) (int, error) {
+
 	query := `
 	INSERT INTO pushups (user_id, date, count)
 	VALUES ($1, $2, $3)
 	ON CONFLICT (user_id, date)
 	DO UPDATE SET 
-		count = pushups.count + EXCLUDED.count`
-	_, err := r.pool.Exec(ctx, query, userID, date, count)
-	return err
+		count = pushups.count + EXCLUDED.count
+	RETURNING count;
+	`
+
+	var total int
+	err := r.pool.QueryRow(
+		ctx,
+		query,
+		userID,
+		date.Truncate(24*time.Hour),
+		count,
+	).Scan(&total)
+
+	return total, err
 }
 
 func (r *pushupRepository) GetFullStat(

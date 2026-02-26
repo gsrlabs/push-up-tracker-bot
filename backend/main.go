@@ -9,7 +9,6 @@ import (
 	"syscall"
 	"time"
 
-	"trackerbot/cache"
 	"trackerbot/config"
 	"trackerbot/db"
 	"trackerbot/hendler"
@@ -77,9 +76,8 @@ func main() {
 
 	pushupRepo := repository.NewPushupRepository(db.Pool)
 
-	todayCache := cache.NewTodayCache(ctx, loc)
 
-	pushupService := service.NewPushupService(pushupRepo, todayCache, loc)
+	pushupService := service.NewPushupService(pushupRepo, loc)
 
 	botHandler := hendler.NewBotHandler(telegramBot, pushupService)
 

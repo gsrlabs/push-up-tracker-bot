@@ -35,7 +35,6 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - ./cache:/app/cache
       - ./config:/config
 
 volumes:

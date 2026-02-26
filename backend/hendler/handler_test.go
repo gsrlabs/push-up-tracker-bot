@@ -5,7 +5,6 @@ import (
 	"context"
 	"strconv"
 	"testing"
-	"trackerbot/cache"
 	"trackerbot/presenter"
 	"trackerbot/repository"
 
@@ -139,14 +138,6 @@ func (m *MockService) BuildSchedule(
 	return bytes.Buffer{}, args.Error(1)
 }
 
-func (m *MockService) DebugCache() *cache.TodayCache {
-	args := m.Called()
-
-	if cacheObj, ok := args.Get(0).(*cache.TodayCache); ok {
-		return cacheObj
-	}
-	return nil
-}
 
 func TestHandleAddPushups(t *testing.T) {
 	mockService := new(MockService)

@@ -134,8 +134,9 @@ func TestPushupRepository_CRUD(t *testing.T) {
 
 	// 3️⃣ AddPushups
 	today := time.Now().Truncate(24 * time.Hour)
-	err = repo.AddPushups(ctx, userID, today, 10)
+	total, err := repo.AddPushups(ctx, userID, today, 10)
 	assert.NoError(t, err)
+	assert.Equal(t, 10, total)
 
 	// 4️⃣ GetTodayStat
 	todayTotal, err := repo.GetTodayStat(ctx, userID, today)
