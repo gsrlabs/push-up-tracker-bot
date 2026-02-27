@@ -41,7 +41,6 @@ type MigrationConfig struct {
 
 type AppConfig struct {
 	DebugMod bool   `mapstructure:"debug_mode"`
-	Timezone string `mapstructure:"timezone"`
 }
 
 type TestConfig struct {
@@ -63,7 +62,6 @@ func Load(path string) (*Config, error) {
 	_ = v.BindEnv("database.password", "DB_PASSWORD")
 	_ = v.BindEnv("database.user", "DB_USER")
 	_ = v.BindEnv("database.name", "DB_NAME")
-	_ = v.BindEnv("app.timezone", "TIME_ZONE")
 
 	if err := v.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)

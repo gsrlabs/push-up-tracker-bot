@@ -31,21 +31,21 @@ func (m *MockPushupRepository) EnsureUser(ctx context.Context, userID int64, use
 	return args.Error(0)
 }
 
-func (m *MockPushupRepository) AddPushups(ctx context.Context, userID int64, date time.Time, count int) (int, error) {
-	args := m.Called(ctx, userID, date, count)
+func (m *MockPushupRepository) AddPushups(ctx context.Context, userID int64, count int) (int, error) {
+	args := m.Called(ctx, userID, count)
 	return args.Int(0), args.Error(1)
 }
 
-func (m *MockPushupRepository) GetFullStat(ctx context.Context, userID int64, date time.Time) (*model.FullStatViewModel, error) {
-	args := m.Called(ctx, userID, date)
+func (m *MockPushupRepository) GetFullStat(ctx context.Context, userID int64) (*model.FullStatViewModel, error) {
+	args := m.Called(ctx, userID)
 	if data, ok := args.Get(0).(*model.FullStatViewModel); ok {
 		return data, args.Error(1)
 	}
 	return nil, args.Error(1)
 }
 
-func (m *MockPushupRepository) GetTodayStat(ctx context.Context, userID int64, date time.Time) (int, error) {
-	args := m.Called(ctx, userID, date)
+func (m *MockPushupRepository) GetTodayStat(ctx context.Context, userID int64) (int, error) {
+	args := m.Called(ctx, userID)
 	return args.Int(0), args.Error(1)
 }
 
@@ -92,8 +92,8 @@ func (m *MockPushupRepository) GetFirstWorkoutDate(ctx context.Context, userID i
 	return time.Time{}, args.Error(1)
 }
 
-func (m *MockPushupRepository) GetFirstNormCompleter(ctx context.Context, date time.Time) (int64, error) {
-	args := m.Called(ctx, date)
+func (m *MockPushupRepository) GetFirstNormCompleter(ctx context.Context) (int64, error) {
+	args := m.Called(ctx)
 	return args.Get(0).(int64), args.Error(1)
 }
 
@@ -127,7 +127,7 @@ func TestService_EnsureUser(t *testing.T) {
 		Return(nil).
 		Once()
 
-	service := NewPushupService(mockRepo, time.UTC)
+	service := NewPushupService(mockRepo)
 
 	err := service.EnsureUser(context.Background(), 1, "john")
 
@@ -139,11 +139,11 @@ func TestMock_AddPushups(t *testing.T) {
 	mockRepo := new(MockPushupRepository)
 
 	mockRepo.
-		On("AddPushups", mock.Anything, int64(1), mock.Anything, 10).
+		On("AddPushups", mock.Anything, int64(1), 10).
 		Return(10, nil).
 		Once()
 
-	totalToday, err := mockRepo.AddPushups(context.Background(), 1, time.Now(), 10)
+	totalToday, err := mockRepo.AddPushups(context.Background(), 1, 10)
 
 	assert.NoError(t, err)
 	mockRepo.AssertExpectations(t)
@@ -158,7 +158,7 @@ func TestMock_GetTodayStat(t *testing.T) {
 		Return(55, nil).
 		Once()
 
-	total, err := mockRepo.GetTodayStat(context.Background(), 1, time.Now())
+	total, err := mockRepo.GetTodayStat(context.Background(), 1)
 
 	assert.NoError(t, err)
 	assert.Equal(t, 55, total)
@@ -291,7 +291,7 @@ func TestMock_GetFirstNormCompleter(t *testing.T) {
 		Return(int64(99), nil).
 		Once()
 
-	userID, err := mockRepo.GetFirstNormCompleter(context.Background(), time.Now())
+	userID, err := mockRepo.GetFirstNormCompleter(context.Background())
 
 	assert.NoError(t, err)
 	assert.Equal(t, int64(99), userID)

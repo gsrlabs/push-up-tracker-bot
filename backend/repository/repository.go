@@ -16,9 +16,9 @@ import (
 type PushupRepository interface {
 	Pool() *pgxpool.Pool
 	EnsureUser(ctx context.Context, userID int64, username string) error
-	AddPushups(ctx context.Context, userID int64, date time.Time, count int) (int, error)
-	GetFullStat(ctx context.Context, userID int64, date time.Time) (*model.FullStatViewModel, error)
-	GetTodayStat(ctx context.Context, userID int64, date time.Time) (int, error)
+	AddPushups(ctx context.Context, userID int64, count int) (int, error)
+	GetFullStat(ctx context.Context, userID int64) (*model.FullStatViewModel, error)
+	GetTodayStat(ctx context.Context, userID int64) (int, error)
 	GetUsername(ctx context.Context, userID int64) (string, error)
 	SetMaxReps(ctx context.Context, userID int64, count int) error
 	SetDateCompletionOfDailyNorm(ctx context.Context, userID int64) error
@@ -26,8 +26,7 @@ type PushupRepository interface {
 	ResetDailyNorm(ctx context.Context, userID int64) error
 	SetDailyNorm(ctx context.Context, userID int64, dailyNorm int) error
 	GetDailyNorm(ctx context.Context, userID int64) (int, error)
-	GetFirstWorkoutDate(ctx context.Context, userID int64) (time.Time, error)
-	GetFirstNormCompleter(ctx context.Context, date time.Time) (int64, error)
+	GetFirstNormCompleter(ctx context.Context) (int64, error)
 	AddMaxRepsHistory(ctx context.Context, userID int64, maxReps int) error
 	GetMaxRepsHistory(ctx context.Context, userID int64) ([]model.MaxRepsHistoryItem, error)
 	GetMaxRepsRecord(ctx context.Context, userID int64) (model.MaxRepsHistoryItem, error)
@@ -65,16 +64,15 @@ func (r *pushupRepository) EnsureUser(ctx context.Context, userID int64, usernam
 func (r *pushupRepository) AddPushups(
 	ctx context.Context,
 	userID int64,
-	date time.Time,
 	count int,
 ) (int, error) {
 
 	query := `
 	INSERT INTO pushups (user_id, date, count)
-	VALUES ($1, $2, $3)
+	VALUES ($1, CURRENT_DATE, $2)
 	ON CONFLICT (user_id, date)
 	DO UPDATE SET 
-		count = pushups.count + EXCLUDED.count
+		count = pushups.count + $2
 	RETURNING count;
 	`
 
@@ -83,7 +81,6 @@ func (r *pushupRepository) AddPushups(
 		ctx,
 		query,
 		userID,
-		date.Truncate(24*time.Hour),
 		count,
 	).Scan(&total)
 
@@ -93,13 +90,12 @@ func (r *pushupRepository) AddPushups(
 func (r *pushupRepository) GetFullStat(
 	ctx context.Context,
 	userID int64,
-	date time.Time,
 ) (*model.FullStatViewModel, error) {
 
 	query := `
 WITH user_stats AS (
     SELECT
-        COALESCE(SUM(count) FILTER (WHERE date = $2), 0) AS today_total,
+        COALESCE(SUM(count) FILTER (WHERE date = CURRENT_DATE), 0) AS today_total,
         COALESCE(SUM(count), 0) AS total_all_time,
         MIN(date) AS first_date
     FROM pushups
@@ -117,7 +113,7 @@ leaderboard AS (
         SELECT u.username, SUM(p.count) AS total_count
         FROM pushups p
         JOIN users u ON u.user_id = p.user_id
-        WHERE p.date = $2
+        WHERE p.date = CURRENT_DATE
         GROUP BY u.username
     ) t
 )
@@ -135,9 +131,8 @@ WHERE u.user_id = $1;
 
 	var result model.FullStatViewModel
 	var leaderboardJSON []byte
-	dateToday := date.Truncate(24 * time.Hour)
 
-	err := r.pool.QueryRow(ctx, query, userID, dateToday).
+	err := r.pool.QueryRow(ctx, query, userID).
 		Scan(
 			&result.TodayTotal,
 			&result.TotalAllTime,
@@ -150,8 +145,6 @@ WHERE u.user_id = $1;
 		return nil, err
 	}
 
-	
-
 	if len(leaderboardJSON) > 0 {
 		if err := json.Unmarshal(leaderboardJSON, &result.Leaderboard); err != nil {
 			return nil, err
@@ -162,10 +155,10 @@ WHERE u.user_id = $1;
 }
 
 // GetTodayStat возвращает суммарное количество отжиманий пользователя за указанную дату
-func (r *pushupRepository) GetTodayStat(ctx context.Context, userID int64, date time.Time) (int, error) {
-	query := `SELECT COALESCE(SUM(count), 0) FROM pushups WHERE user_id = $1 AND date = $2`
+func (r *pushupRepository) GetTodayStat(ctx context.Context, userID int64) (int, error) {
+	query := `SELECT COALESCE(SUM(count), 0) FROM pushups WHERE user_id = $1 AND date = CURRENT_DATE`
 	var total int
-	err := r.pool.QueryRow(ctx, query, userID, date.Truncate(24*time.Hour)).Scan(&total)
+	err := r.pool.QueryRow(ctx, query, userID).Scan(&total)
 	return total, err
 }
 
@@ -233,30 +226,12 @@ func (r *pushupRepository) GetDailyNorm(ctx context.Context, userID int64) (int,
 	return dailyNorm, err
 }
 
-// GetFirstWorkoutDate возвращает дату первой тренировки пользователя
-func (r *pushupRepository) GetFirstWorkoutDate(ctx context.Context, userID int64) (time.Time, error) {
-	query := `
-        SELECT COALESCE(MIN(date), '0001-01-01'::DATE) 
-        FROM pushups 
-        WHERE user_id = $1 
-        AND count > 0
-    `
 
-	var firstDate time.Time
-	err := r.pool.QueryRow(ctx, query, userID).Scan(&firstDate)
-
-	if err != nil {
-		return time.Time{}, fmt.Errorf("ошибка получения даты первой тренировки: %w", err)
-	}
-
-	return firstDate, nil
-}
-
-func (r *pushupRepository) GetFirstNormCompleter(ctx context.Context, date time.Time) (int64, error) {
+func (r *pushupRepository) GetFirstNormCompleter(ctx context.Context) (int64, error) {
 	query := `
         SELECT user_id 
         FROM pushups 
-        WHERE date = $1 
+        WHERE date = CURRENT_DATE 
         GROUP BY user_id 
         HAVING SUM(count) >= (SELECT daily_norm FROM users WHERE user_id = pushups.user_id)
         ORDER BY MIN(record_id) 
@@ -264,7 +239,7 @@ func (r *pushupRepository) GetFirstNormCompleter(ctx context.Context, date time.
     `
 
 	var userID int64
-	err := r.pool.QueryRow(ctx, query, date).Scan(&userID)
+	err := r.pool.QueryRow(ctx, query).Scan(&userID)
 	if err != nil {
 		return 0, err
 	}
