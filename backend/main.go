@@ -7,7 +7,6 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
-	"time"
 
 	"trackerbot/config"
 	"trackerbot/db"
@@ -42,10 +41,6 @@ func main() {
 		log.Fatalf("❌ Invalid config: %v", err)
 	}
 
-	loc, err := time.LoadLocation(cfg.App.Timezone)
-	if err != nil {
-		log.Fatalf("❌ Invalid timezone: %v", err)
-	}
 
 	botToken := cfg.GetBotToken()
 
@@ -77,7 +72,7 @@ func main() {
 	pushupRepo := repository.NewPushupRepository(db.Pool)
 
 
-	pushupService := service.NewPushupService(pushupRepo, loc)
+	pushupService := service.NewPushupService(pushupRepo)
 
 	botHandler := hendler.NewBotHandler(telegramBot, pushupService)
 

@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 
-	"time"
 	"trackerbot/model"
 	"trackerbot/repository"
 )
@@ -22,35 +21,22 @@ type PushupService interface {
 	ResetDailyNorm(ctx context.Context, userID int64) error
 	GetFullStat(ctx context.Context, userID int64) (*model.FullStatViewModel, error)
 	GetUserMaxReps(ctx context.Context, userID int64) (int, error)
-	GetFirstWorkoutDate(ctx context.Context, userID int64) (string, error)
 	CheckNormCompletion(ctx context.Context) (bool, string)
 	BuildSchedule(ctx context.Context, userID int64, history []model.MaxRepsHistoryItem) (bytes.Buffer, error)
-
 }
 
 type pushupService struct {
 	repo     repository.PushupRepository
-	location *time.Location
+
 }
 
 
-
-func NewPushupService(repo repository.PushupRepository, location *time.Location) PushupService {
+func NewPushupService(repo repository.PushupRepository,) PushupService {
 	return &pushupService{
 		repo:     repo,
-		location: location,
 	}
 }
-func (s *pushupService) today() time.Time {
-	now := time.Now().In(s.location)
-	return time.Date(
-		now.Year(),
-		now.Month(),
-		now.Day(),
-		0, 0, 0, 0,
-		s.location,
-	)
-}
+
 
 func (s *pushupService) EnsureUser(ctx context.Context, userID int64, username string) error {
 	return s.repo.EnsureUser(ctx, userID, username)
@@ -62,18 +48,15 @@ func (s *pushupService) AddPushups(
 	count int,
 ) (*model.AddPushupsViewModel, error) {
 
-	today := s.today()
-
 	// --- Получаем дневную норму ---
 	dailyNorm, err := s.repo.GetDailyNorm(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 
-
 	// --- Добавляем отжимания ---
 
-	totalToday, err := s.repo.AddPushups(ctx, userID, today, count)
+	totalToday, err := s.repo.AddPushups(ctx, userID, count)
 	if err != nil {
 		return nil, fmt.Errorf("ошибка сохранения в БД: %w", err)
 	}
@@ -173,9 +156,7 @@ func (s *pushupService) GetFullStat(
 	userID int64,
 ) (*model.FullStatViewModel, error) {
 
-	today := s.today()
-
-	data, err := s.repo.GetFullStat(ctx, userID, today)
+	data, err := s.repo.GetFullStat(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -201,18 +182,11 @@ func (s *pushupService) GetUserMaxReps(ctx context.Context, userID int64) (int, 
 	return s.repo.GetUserMaxReps(ctx, userID)
 }
 
-func (s *pushupService) GetFirstWorkoutDate(ctx context.Context, userID int64) (string, error) {
-	date, err := s.repo.GetFirstWorkoutDate(ctx, userID)
-	if err != nil {
-		return "", err
-	}
-	return date.Format("02.01.2006"), nil
-}
+
 
 // CheckNormCompletion проверяет, выполнил ли кто-то дневную норму
 func (s *pushupService) CheckNormCompletion(ctx context.Context) (bool, string) {
-	today := s.today()
-	userID, err := s.repo.GetFirstNormCompleter(ctx, today)
+	userID, err := s.repo.GetFirstNormCompleter(ctx)
 
 	if err != nil || userID == 0 {
 		return false, ""

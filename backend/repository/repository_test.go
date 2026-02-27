@@ -6,7 +6,6 @@ import (
 
 	"os"
 	"testing"
-	"time"
 
 	"trackerbot/config"
 	"trackerbot/db"
@@ -133,13 +132,12 @@ func TestPushupRepository_CRUD(t *testing.T) {
 	assert.Equal(t, username, uName)
 
 	// 3️⃣ AddPushups
-	today := time.Now().Truncate(24 * time.Hour)
-	total, err := repo.AddPushups(ctx, userID, today, 10)
+	total, err := repo.AddPushups(ctx, userID, 10)
 	assert.NoError(t, err)
 	assert.Equal(t, 10, total)
 
 	// 4️⃣ GetTodayStat
-	todayTotal, err := repo.GetTodayStat(ctx, userID, today)
+	todayTotal, err := repo.GetTodayStat(ctx, userID)
 	assert.NoError(t, err)
 	assert.Equal(t, 10, todayTotal)
 
@@ -180,7 +178,7 @@ func TestPushupRepository_CRUD(t *testing.T) {
 	assert.Equal(t, 20, record.MaxReps)
 
 	// 1️⃣2️⃣ GetFullStat
-	fullStat, err := repo.GetFullStat(ctx, userID, today)
+	fullStat, err := repo.GetFullStat(ctx, userID)
 	assert.NoError(t, err)
 	assert.Equal(t, 10, fullStat.TodayTotal)
 	assert.NotEmpty(t, fullStat.Leaderboard)
